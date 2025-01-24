@@ -43,45 +43,47 @@ export const Agreements: React.FC = () => {
         </div>
         <h2 className="text-2xl font-bold text-light">Legal Agreements</h2>
         <p className="text-light/80 mt-2">
-          Please review and accept our terms and policies
+          Almost done! Review and accept our terms and policies
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-4">
-          <label className="flex items-start gap-3 cursor-pointer group">
+          <label className="flex items-center gap-3 cursor-pointer group">
             <input
               type="checkbox"
               checked={agreements.terms}
               onChange={() => handleChange('terms')}
-              className="mt-1 text-primary focus:ring-primary"
+              className="min-w-[20px] min-h-[20px] w-5 h-5 text-primary focus:ring-primary rounded border-light/20"
             />
             <span className="text-light/80">
               I accept the <a href="/terms" target="_blank" className="text-primary hover:text-secondary-honey">Terms of Service</a>
+              <span className="text-tertiary-pink ml-1">*</span>
             </span>
           </label>
 
-          <label className="flex items-start gap-3 cursor-pointer group">
+          <label className="flex items-center gap-3 cursor-pointer group">
             <input
               type="checkbox"
               checked={agreements.privacy}
               onChange={() => handleChange('privacy')}
-              className="mt-1 text-primary focus:ring-primary"
+              className="min-w-[20px] min-h-[20px] w-5 h-5 text-primary focus:ring-primary rounded border-light/20"
             />
             <span className="text-light/80">
               I accept the <a href="/privacy" target="_blank" className="text-primary hover:text-secondary-honey">Privacy Policy</a>
+              <span className="text-tertiary-pink ml-1">*</span>
             </span>
           </label>
 
-          <label className="flex items-start gap-3 cursor-pointer group">
+          <label className="flex items-center gap-3 cursor-pointer group">
             <input
               type="checkbox"
               checked={agreements.marketing}
               onChange={() => handleChange('marketing')}
-              className="mt-1 text-primary focus:ring-primary"
+              className="min-w-[20px] min-h-[20px] w-5 h-5 text-primary focus:ring-primary rounded border-light/20"
             />
-            <span className="text-light/80">
-              I agree to receive marketing communications (optional)
+            <span className="flex-1 text-light whitespace-nowrap">
+              I agree to receive marketing communications <span className="text-light/60 ml-1">(optional)</span>
             </span>
           </label>
         </div>

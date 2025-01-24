@@ -37,7 +37,7 @@ export const WelcomeScreen: React.FC = () => {
               Welcome to Landhoney
             </h1>
             <p className="text-xl text-light/80">
-              Free yourself from inflation
+              Invest in real assets that pay you, from $1
             </p>
           </div>
 
