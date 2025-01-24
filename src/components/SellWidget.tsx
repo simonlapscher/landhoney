@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDownIcon } from '@heroicons/react/24/solid';
 
-const SellWidget: React.FC = () => {
+export const SellWidget: React.FC = () => {
   const [sellingAmount, setSellingAmount] = useState<string>('');
   const [amountType, setAmountType] = useState<'USD' | 'Token'>('Token');
   const [sellingAsset, setSellingAsset] = useState<string>('Honey');
@@ -16,7 +16,16 @@ const SellWidget: React.FC = () => {
   });
 
   const handleRequestSell = () => {
-    // Logic to handle the sell request
+    console.log('Submitting sell request with:', {
+      sellingAmount,
+      amountType,
+      sellingAsset,
+      receivingAsset,
+      contactMethod,
+      contactInfo,
+      receivingDetails
+    });
+    // Add your API call or form submission logic here
   };
 
   const renderReceivingDetailsInput = () => {
@@ -202,11 +211,9 @@ const SellWidget: React.FC = () => {
           )}
           className="w-full bg-primary text-dark font-bold py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-secondary-honey transition-colors"
         >
-          {!sellingAmount ? 'Enter an Amount' : 'Request Sell'}
+          {!sellingAmount ? 'Enter an Amount' : 'Submit Sell Request'}
         </button>
       </div>
     </div>
   );
-};
-
-export default SellWidget; 
+}; 
