@@ -17,15 +17,15 @@ export const OnboardingLayout: React.FC = () => {
               <ProgressDots />
             </div>
           )}
-          <div className="flex-grow pt-8">
+          <div className="flex-grow pt-8 relative">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={location.pathname}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.1 }}
-                style={{ position: 'absolute', width: '100%' }}
+                transition={{ duration: 0.08 }}
+                className="absolute inset-x-0"
               >
                 <Outlet />
               </motion.div>
