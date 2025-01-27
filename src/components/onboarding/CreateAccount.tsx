@@ -52,19 +52,26 @@ export const CreateAccount: React.FC = () => {
     }
 
     try {
+      const redirectTo = new URL('/onboarding/country', window.location.origin).toString();
+      console.log('Redirect URL:', redirectTo);
+      
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
-          emailRedirectTo: `${window.location.origin}/onboarding/country`
+          emailRedirectTo: redirectTo
         }
       });
 
-      if (signUpError) throw signUpError;
+      if (signUpError) {
+        console.error('Signup Error Details:', signUpError);
+        throw signUpError;
+      }
 
       setSuccess(true);
     } catch (err: any) {
-      setError(err.message);
+      console.error('Full Error:', err);
+      setError(err.message || 'An error occurred during signup');
     } finally {
       setLoading(false);
     }

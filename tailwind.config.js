@@ -1,5 +1,5 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+export default {
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -7,28 +7,29 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: '#FFE51D',
         dark: '#221E19',
         light: '#FCFAF3',
+        primary: {
+          DEFAULT: '#FFE51D',
+          dark: '#E5CE1A',
+          light: '#FFF184',
+        },
         secondary: {
-          honey: '#FFF184',
-          orange: '#F27C08',
+          DEFAULT: '#2B2B2B',
+          dark: '#1A1A1A',
+          light: '#3C3C3C',
         },
         tertiary: {
-          blue: '#67D1EF',
-          darkBlue: '#0B5AD5',
-          cyan: '#79E5E4',
-          green: '#42DB98',
-          pink: '#F88396',
-        }
+          DEFAULT: '#F2F2F2',
+          dark: '#E6E6E6',
+          light: '#FFFFFF',
+        },
       },
       fontFamily: {
         codec: ['Codec Pro', 'sans-serif'],
       }
     },
   },
-  plugins: [
-    require('tailwind-scrollbar')({ nocompatible: true }),
-  ],
+  plugins: [],
 }
 

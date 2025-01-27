@@ -4,4 +4,8 @@ export const styles = {
   heading: 'text-lg font-bold text-light mb-2',
   inputGroup: 'space-y-2',
   flex: 'flex items-center gap-4',
+};
+
+export const classNames = (...classes: (string | boolean | undefined | null)[]): string => {
+  return classes.filter(Boolean).join(' ');
 }; 

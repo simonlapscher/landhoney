@@ -40,7 +40,7 @@ export const TaxInfo: React.FC = () => {
       <form onSubmit={handleSubmit} className="space-y-6">
         <Input
           type="text"
-          label="Tax ID Number"
+          label="Tax ID or Social Security Number"
           value={taxId}
           onChange={(e) => setTaxId(e.target.value)}
           placeholder="Enter your tax ID"
