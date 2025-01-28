@@ -1,3 +1,4 @@
-export { Invest } from './Invest';
-export { AssetCard } from './AssetCard';
-export type { Asset } from './AssetCard'; 
+export * from './Invest';
+export * from './AssetCard';
+export * from './AssetDetail';
+export * from './InvestmentBox'; 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 
 export const ProtectedLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -17,9 +18,9 @@ export const ProtectedLayout: React.FC = () => {
       {/* Sidebar Navigation */}
       <nav className="w-64 border-r border-light/10 p-4">
         <img 
-          src="/assets/images/Logo Negative.png" 
-          alt="Landhoney" 
-          className="h-8 mb-8"
+          className="h-8 w-auto"
+          src="https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/logo-negative.png"
+          alt="Landhoney"
         />
         <div className="space-y-2">
           {[

@@ -28,24 +28,17 @@ CREATE TABLE assets (
 CREATE TABLE debt_assets (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     asset_id UUID NOT NULL REFERENCES assets(id),
+    location TEXT NOT NULL,
     apr NUMERIC(5,2) NOT NULL,
-    term_months INTEGER NOT NULL,
-    loan_amount NUMERIC(16,2) NOT NULL,
-    status TEXT NOT NULL CHECK (status IN ('active', 'sold_out', 'closed')),
-    address TEXT NOT NULL,
-    city TEXT NOT NULL,
-    state TEXT NOT NULL,
-    zip_code TEXT NOT NULL,
-    country TEXT NOT NULL DEFAULT 'USA',
-    appraised_value NUMERIC(16,2) NOT NULL,
-    loan_start_date TIMESTAMPTZ,
-    loan_maturity_date TIMESTAMPTZ,
-    images JSONB,
-    documents JSONB,
+    ltv NUMERIC(5,2) NOT NULL,
+    term TEXT NOT NULL,
+    funding_goal NUMERIC(16,2) NOT NULL,
+    funded_amount NUMERIC(16,2) NOT NULL DEFAULT 0,
+    remaining_amount NUMERIC(16,2) NOT NULL,
     metadata JSONB,
-    CONSTRAINT positive_loan_amount CHECK (loan_amount > 0),
-    CONSTRAINT positive_appraised_value CHECK (appraised_value > 0),
-    CONSTRAINT valid_loan_dates CHECK (loan_maturity_date > loan_start_date)
+    CONSTRAINT positive_funding_goal CHECK (funding_goal > 0),
+    CONSTRAINT valid_funded_amount CHECK (funded_amount >= 0),
+    CONSTRAINT valid_remaining_amount CHECK (remaining_amount >= 0)
 );
 
 -- Create historical prices table
@@ -134,7 +127,6 @@ CREATE TRIGGER update_user_balances_updated_at
 
 -- Create indexes
 CREATE INDEX idx_assets_type ON assets(type);
-CREATE INDEX idx_debt_assets_status ON debt_assets(status);
 CREATE INDEX idx_asset_prices_asset_timestamp ON asset_prices(asset_id, timestamp);
 CREATE INDEX idx_transactions_user ON transactions(user_id);
 CREATE INDEX idx_transactions_asset ON transactions(asset_id);

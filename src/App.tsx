@@ -21,6 +21,7 @@ import { TermsOfService } from './components/legal/TermsOfService';
 import { PrivacyPolicy } from './components/legal/PrivacyPolicy';
 import { MarketingPreferences } from './components/legal/MarketingPreferences';
 import { SSNInput } from './components/onboarding/SSNInput';
+import { AssetDetail } from './components/invest';
 
 function App() {
   return (
@@ -52,6 +53,7 @@ function App() {
           <Route path="profile" element={<Profile />} />
           <Route path="portfolio" element={<Portfolio />} />
           <Route path="invest" element={<Invest />} />
+          <Route path="invest/:id" element={<AssetDetail />} />
           <Route path="reserve" element={<LiquidReserve />} />
         </Route>
 

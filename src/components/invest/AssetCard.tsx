@@ -1,108 +1,96 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatCurrency, formatPercentage } from '../../utils/format';
+import { Asset, DebtAsset, CommodityAsset } from '../../lib/types/asset';
 
-export interface Asset {
-  id: string;
-  name: string;
-  type: 'debt' | 'commodity';
-  imageUrl: string;
-  location?: string;
-  apr?: number;
-  ltv?: number;
-  term?: string;
-  fundingGoal: number;
-  fundedAmount: number;
-  remainingAmount: number;
-  status: 'active' | 'funded' | 'closed';
-  description?: string;
-}
-
-interface AssetCardProps {
-  asset: Asset;
-}
-
-export const AssetCard: React.FC<AssetCardProps> = ({ asset }) => {
+export const AssetCard: React.FC<{ asset: Asset }> = ({ asset }) => {
   const navigate = useNavigate();
-  const percentageFunded = (asset.fundedAmount / asset.fundingGoal) * 100;
 
-  const handleClick = () => {
-    navigate(`/invest/${asset.id}`);
+  const handleCardClick = () => {
+    console.log('Card clicked, navigating to:', `/app/invest/${asset.id}`);
+    navigate(`/app/invest/${asset.id}`);
   };
 
-  const termInMonths = asset.term?.replace(' months', ' Mo.');
+  const handleInvestClick = (e: React.MouseEvent) => {
+    console.log('Invest button clicked, navigating to:', `/app/invest/${asset.id}`);
+    e.stopPropagation(); // Prevent card click when clicking the button
+    navigate(`/app/invest/${asset.id}`);
+  };
+
+  const isDebtAsset = (asset: Asset): asset is DebtAsset => {
+    return asset.type === 'debt';
+  };
+
+  const isCommodityAsset = (asset: Asset): asset is CommodityAsset => {
+    return asset.type === 'commodity';
+  };
+
+  const getLatestPrice = (asset: CommodityAsset) => {
+    if (!asset.asset_prices?.length) return null;
+    return asset.asset_prices.sort((a, b) => 
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    )[0].price;
+  };
 
   return (
     <div 
-      onClick={handleClick}
-      className="bg-secondary border border-light/10 rounded-lg overflow-hidden cursor-pointer hover:border-light/30 transition-colors flex flex-col"
+      className="bg-secondary rounded-lg overflow-hidden cursor-pointer hover:bg-secondary/80 transition-colors flex flex-col h-full"
+      onClick={handleCardClick}
     >
-      <div className="relative h-48">
-        <img 
-          src={asset.imageUrl} 
+      <div className="relative pt-[56.25%]">
+        <img
+          src={asset.main_image}
           alt={asset.name}
-          className="w-full h-full object-cover"
+          className="absolute top-0 left-0 w-full h-full object-cover"
         />
       </div>
-      
-      <div className="p-4 flex-1 flex flex-col">
-        <h3 className="text-lg font-semibold text-light mb-4 text-center">
-          {asset.type === 'debt' ? asset.location : asset.name}
-        </h3>
-
-        {asset.type === 'debt' ? (
+      <div className="p-6 flex-1 flex flex-col">
+        {isDebtAsset(asset) ? (
           <>
+            <h3 className="text-xl text-light mb-4 text-center">{asset.location}</h3>
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="text-center">
-                <p className="text-2xl font-bold text-light">{formatPercentage(asset.apr || 0)}</p>
+                <p className="text-2xl text-light font-medium">{asset.apr}%</p>
                 <p className="text-sm text-light/60">APR</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-light">{formatPercentage(asset.ltv || 0)}</p>
+                <p className="text-2xl text-light font-medium">{asset.ltv}%</p>
                 <p className="text-sm text-light/60">LTV</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-light">{termInMonths}</p>
+                <p className="text-2xl text-light font-medium">{asset.term_months} Mo.</p>
                 <p className="text-sm text-light/60">Term</p>
               </div>
             </div>
-
-            <div className="mt-auto">
-              <div className="w-full bg-light/5 rounded-full h-2 mb-2">
-                <div 
-                  className="bg-[#42DB98] h-2 rounded-full" 
-                  style={{ width: `${percentageFunded}%` }}
+            <div className="space-y-2 flex-1">
+              <div className="w-full bg-dark rounded-full h-2">
+                <div
+                  className="bg-[#42DB98] h-2 rounded-full transition-all duration-500"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, (asset.funded_amount / asset.funding_goal) * 100))}%`,
+                  }}
                 />
               </div>
-              <div className="text-right mb-4">
-                <span className="text-sm text-light">
-                  {formatCurrency(asset.remainingAmount)} remaining
+              <div className="flex justify-end text-sm">
+                <span className="text-light/60">
+                  ${Math.round(asset.remaining_amount).toLocaleString()} remaining
                 </span>
               </div>
             </div>
           </>
-        ) : (
-          <div className="flex-1 flex flex-col">
-            {asset.description && (
-              <p className="text-base text-light mb-6">{asset.description}</p>
-            )}
-            <div className="mb-6">
-              <p className="text-sm text-light/60 mb-2">Price</p>
-              <p className="text-2xl font-bold text-light flex items-baseline">
-                {formatCurrency(asset.fundingGoal / 1000)}
-                <span className="text-sm text-light/60 ml-1">per {asset.name}</span>
+        ) : isCommodityAsset(asset) ? (
+          <>
+            <h3 className="text-xl text-light mb-2">{asset.name}</h3>
+            <p className="text-light/60 mb-4 flex-1">{asset.description}</p>
+            {getLatestPrice(asset) && (
+              <p className="text-2xl text-light font-medium mb-4">
+                ${getLatestPrice(asset)?.toLocaleString() || '0'}
               </p>
-            </div>
-            <div className="flex-grow" />
-          </div>
-        )}
-
+            )}
+          </>
+        ) : null}
         <button 
-          className="w-full bg-[#42DB98] text-dark py-3 px-4 rounded-md text-lg font-medium hover:bg-[#3BC589] transition-colors duration-200"
-          onClick={(e) => {
-            e.stopPropagation();
-            // Handle invest action
-          }}
+          onClick={handleInvestClick}
+          className="w-full bg-[#42DB98] text-dark font-medium text-lg py-3 px-6 rounded-lg mt-6 hover:bg-[#42DB98]/80 transition-colors"
         >
           Invest
         </button>
