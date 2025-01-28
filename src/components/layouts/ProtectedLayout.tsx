@@ -18,15 +18,15 @@ export const ProtectedLayout: React.FC = () => {
       {/* Sidebar Navigation */}
       <nav className="w-64 border-r border-light/10 p-4">
         <img 
-          className="h-8 w-auto"
+          className="h-8 w-auto mb-8"
           src="https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/logo-negative.png"
           alt="Landhoney"
         />
-        <div className="space-y-2">
+        <div className="space-y-2 mt-4">
           {[
             { path: 'profile', label: 'Account' },
-            { path: 'portfolio', label: 'Portfolio' },
             { path: 'invest', label: 'Invest' },
+            { path: 'portfolio', label: 'Portfolio' },
             { path: 'reserve', label: 'Liquid Reserve' },
           ].map(({ path, label }) => (
             <NavLink

@@ -78,7 +78,7 @@ export const Invest: React.FC = () => {
             <button
               key={category}
               className={classNames(
-                'pb-4 text-sm font-medium border-b-2 -mb-px',
+                'pb-4 text-base font-medium border-b-2 -mb-px text-lg',
                 selectedIndex === index
                   ? 'border-primary text-primary'
                   : 'border-transparent text-light/60 hover:text-light/80 hover:border-light/30'

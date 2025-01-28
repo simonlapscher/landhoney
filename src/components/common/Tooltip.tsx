@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { InformationCircleIcon } from '@heroicons/react/24/outline';
+import React from 'react';
 
 interface TooltipProps {
   content: string;
@@ -7,26 +6,17 @@ interface TooltipProps {
 }
 
 export const Tooltip: React.FC<TooltipProps> = ({ content, children }) => {
-  const [isVisible, setIsVisible] = useState(false);
-
   return (
-    <div className="relative inline-flex items-center group">
-      {children}
-      <button
-        className="ml-1 text-light/60 hover:text-light/80"
-        onMouseEnter={() => setIsVisible(true)}
-        onMouseLeave={() => setIsVisible(false)}
-        onClick={() => setIsVisible(!isVisible)}
-      >
-        <InformationCircleIcon className="h-4 w-4" />
-      </button>
-      
-      {isVisible && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-dark text-light text-sm rounded-lg shadow-lg w-48 z-10">
+    <div className="relative group">
+      <div className="cursor-help">
+        {children}
+      </div>
+      <div className="absolute z-10 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-300 bottom-full left-1/2 transform -translate-x-1/2 mb-2">
+        <div className="bg-dark-gray px-3 py-1 rounded text-sm text-light whitespace-nowrap">
           {content}
-          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-dark rotate-45" />
+          <div className="absolute w-2 h-2 bg-dark-gray transform rotate-45 left-1/2 -translate-x-1/2 -bottom-1"></div>
         </div>
-      )}
+      </div>
     </div>
   );
 }; 

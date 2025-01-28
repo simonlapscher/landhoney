@@ -26,6 +26,8 @@ export interface DebtAsset extends BaseAsset {
   funded_amount: number;
   remaining_amount: number;
   images?: string[];
+  total_supply: number;
+  available_supply: number;
 }
 
 export interface AssetPrice {
@@ -36,6 +38,18 @@ export interface AssetPrice {
 export interface CommodityAsset extends BaseAsset {
   type: 'commodity';
   asset_prices: AssetPrice[];
+}
+
+export interface AssetBalance {
+  id: string;
+  user_id: string;
+  asset_id: string;
+  asset: DebtAsset;
+  balance: number;
+  total_interest_earned: number;
+  last_transaction_at?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export type Asset = DebtAsset | CommodityAsset; 
