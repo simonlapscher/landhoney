@@ -74,15 +74,16 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose }) =>
         setIsSubmitting(true);
         setError(null);
         
+        if (!user) {
+          throw new Error('Please sign in to invest');
+        }
+        
         console.log('Creating transaction for asset:', {
           id: asset.id,
           name: asset.name,
           type: asset.type,
           symbol: asset.symbol,
-          price_per_token: asset.price_per_token,
-          location: asset.location,
-          apr: asset.apr,
-          ltv: asset.ltv
+          price_per_token: asset.price_per_token
         });
         
         const newTransaction = await transactionService.createTransaction(
@@ -96,11 +97,10 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose }) =>
         );
         
         setTransaction(newTransaction);
-        await transactionService.setupAutoApproval(newTransaction.id);
         setWidgetState('confirmation');
       } catch (err) {
         console.error('Error creating transaction:', err);
-        setError('Failed to create transaction. Please try again.');
+        setError(err instanceof Error ? err.message : 'Failed to create transaction. Please try again.');
       } finally {
         setIsSubmitting(false);
       }

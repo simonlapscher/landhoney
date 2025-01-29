@@ -4,26 +4,12 @@ import { formatCurrency } from '../../utils/format';
 import { Button } from '../common/Button';
 import { useNavigate } from 'react-router-dom';
 import { OrderDetailPopup } from './OrderDetailPopup';
+import { transactionService } from '../../lib/services/transactionService';
+import { useAuth } from '../../lib/context/AuthContext';
+import { Asset } from '../../lib/types/asset';
+import { Transaction as BaseTransaction } from '../../lib/types/transaction';
 
-interface Transaction {
-  id: string;
-  created_at: string;
-  asset_id: string;
-  type: 'buy' | 'sell';
-  amount: number;
-  price_per_token: number;
-  status: 'pending' | 'completed' | 'failed' | 'cancelled';
-  asset: {
-    name: string;
-    symbol: string;
-    main_image: string;
-  };
-}
-
-interface Balance {
-  asset_id: string;
-  balance: number;
-  total_value: number;
+interface TransactionWithAsset extends BaseTransaction {
   asset: {
     name: string;
     symbol: string;
@@ -32,50 +18,123 @@ interface Balance {
   };
 }
 
+interface PortfolioAsset {
+  name: string;
+  symbol: string;
+  main_image: string;
+  price_per_token: number;
+}
+
+interface Transaction extends Omit<BaseTransaction, 'type'> {
+  type: 'buy' | 'sell';
+  asset: PortfolioAsset;
+}
+
+interface PortfolioBalance {
+  id: string;
+  user_id: string;
+  asset_id: string;
+  balance: number;
+  total_value: number;
+  total_interest_earned: number;
+  created_at: string;
+  updated_at: string;
+  last_transaction_at: string | null;
+  asset: PortfolioAsset;
+}
+
 export const Portfolio: React.FC = () => {
   const navigate = useNavigate();
+  const { originalUser } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [balances, setBalances] = useState<Balance[]>([]);
+  const [balances, setBalances] = useState<PortfolioBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
+  const fetchPortfolioData = async () => {
+    if (!originalUser) {
+      setError('No authenticated user');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      console.log('Fetching portfolio data for user:', originalUser.email);
+
+      const transactionsData = await transactionService.getUserTransactions(originalUser.id) as TransactionWithAsset[];
+      const balancesData = await transactionService.getUserBalances(originalUser.id);
+
+      console.log('Received transactions:', transactionsData.length);
+      console.log('Received balances:', balancesData.length);
+
+      // Filter out non-buy/sell transactions and map to Portfolio Transaction type
+      const filteredTransactions = transactionsData
+        .filter(t => t.type === 'buy' || t.type === 'sell')
+        .map(t => ({
+          ...t,
+          type: t.type as 'buy' | 'sell',
+          asset: {
+            name: t.asset.name,
+            symbol: t.asset.symbol,
+            main_image: t.asset.main_image,
+            price_per_token: t.asset.price_per_token
+          }
+        }));
+
+      // Map balances to Portfolio Balance type
+      const mappedBalances = balancesData
+        .filter(b => Number(b.balance) > 0)
+        .map(b => ({
+          id: b.id,
+          user_id: b.user_id,
+          asset_id: b.asset_id,
+          balance: Number(b.balance),
+          total_value: Number(b.balance) * Number(b.asset.price_per_token),
+          total_interest_earned: Number(b.total_interest_earned),
+          created_at: b.created_at,
+          updated_at: b.updated_at,
+          last_transaction_at: b.last_transaction_at || null,
+          asset: {
+            name: b.asset.name,
+            symbol: b.asset.symbol,
+            main_image: b.asset.main_image,
+            price_per_token: b.asset.price_per_token
+          }
+        })) as PortfolioBalance[];
+
+      console.log('Setting filtered transactions:', filteredTransactions.length);
+      console.log('Setting mapped balances:', mappedBalances.length);
+
+      setTransactions(filteredTransactions);
+      setBalances(mappedBalances);
+    } catch (err) {
+      console.error('Error fetching portfolio data:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchPortfolioData = async () => {
-      try {
-        // Fetch user's transactions
-        const { data: transactionsData, error: transactionsError } = await supabase
-          .from('transactions')
-          .select(`
-            *,
-            asset:assets(name, symbol, main_image)
-          `)
-          .order('created_at', { ascending: false });
+    if (originalUser) {
+      fetchPortfolioData();
+    }
+  }, [originalUser]);
 
-        if (transactionsError) throw transactionsError;
+  // Refresh data periodically
+  useEffect(() => {
+    if (!originalUser) return;
 
-        // Fetch user's balances with current value
-        const { data: balancesData, error: balancesError } = await supabase
-          .from('user_balances_with_value')
-          .select(`
-            *,
-            asset:assets(name, symbol, main_image, price_per_token)
-          `)
-          .gt('balance', 0);
+    const interval = setInterval(() => {
+      fetchPortfolioData();
+    }, 30000); // Refresh every 30 seconds
 
-        if (balancesError) throw balancesError;
-
-        setTransactions(transactionsData);
-        setBalances(balancesData);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchPortfolioData();
-  }, []);
+    return () => clearInterval(interval);
+  }, [originalUser]);
 
   const totalPortfolioValue = balances.reduce((sum, balance) => sum + Number(balance.total_value), 0);
 

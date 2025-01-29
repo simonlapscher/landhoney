@@ -50,19 +50,55 @@ export const CountrySelection: React.FC = () => {
     setLoading(true);
     
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
       if (!user) throw new Error('No user found');
 
-      const { error: updateError } = await supabase
+      // First try to get the existing profile
+      const { data: existingProfile, error: fetchError } = await supabase
         .from('profiles')
-        .update({ country: selectedCountry })
-        .eq('user_id', user.id);
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
 
-      if (updateError) throw updateError;
+      if (fetchError && fetchError.code !== 'PGRST116') { // Not found error
+        throw fetchError;
+      }
+
+      let updateError;
+      if (existingProfile) {
+        // Update existing profile
+        const { error } = await supabase
+          .from('profiles')
+          .update({ 
+            country: selectedCountry,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', user.id);
+        updateError = error;
+      } else {
+        // Insert new profile
+        const { error } = await supabase
+          .from('profiles')
+          .insert({
+            user_id: user.id,
+            country: selectedCountry,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+        updateError = error;
+      }
+
+      if (updateError) {
+        console.error('Profile update/insert error:', updateError);
+        throw updateError;
+      }
 
       navigate('/onboarding/phone');
     } catch (error) {
       console.error('Error saving country selection:', error);
+      // You might want to show this error to the user
+      // Add error state and display it in the UI if needed
     } finally {
       setLoading(false);
     }

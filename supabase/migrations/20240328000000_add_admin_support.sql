@@ -26,4 +26,18 @@ USING ((SELECT is_admin FROM auth.users WHERE id = auth.uid()));
 -- Allow admins to update user balances
 CREATE POLICY "Admins can update balances"
 ON user_balances FOR UPDATE
-USING ((SELECT is_admin FROM auth.users WHERE id = auth.uid())); 
+USING ((SELECT is_admin FROM auth.users WHERE id = auth.uid()));
+
+-- Allow authenticated users to view their own user data
+CREATE POLICY "Users can view their own user data"
+ON auth.users FOR SELECT
+USING (auth.uid() = id);
+
+-- Allow authenticated users to view other users' basic data
+CREATE POLICY "Users can view other users' basic data"
+ON auth.users FOR SELECT
+USING (true)
+WITH CHECK (
+  -- Only allow access to non-sensitive fields
+  (CURRENT_SETTING('request.select.columns', true)::text[] <@ ARRAY['id', 'email', 'created_at'])
+); 

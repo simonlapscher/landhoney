@@ -15,7 +15,6 @@ export const WelcomeScreen: React.FC = () => {
   };
 
   const handleLogin = () => {
-    // TODO: We'll implement login later
     navigate('/onboarding/login');
   };
 

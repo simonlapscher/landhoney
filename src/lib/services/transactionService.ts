@@ -50,6 +50,34 @@ export const transactionService = {
     pricePerToken: number
   ): Promise<Transaction> {
     try {
+      console.log('Starting transaction creation with:', {
+        userId,
+        assetId,
+        amountTokens,
+        pricePerToken,
+        paymentMethod
+      });
+
+      // First verify the session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        throw new TransactionError(
+          'Authentication error',
+          'AUTH_ERROR',
+          'Please sign in again'
+        );
+      }
+      
+      if (!session) {
+        console.error('No active session found');
+        throw new TransactionError(
+          'No active session',
+          'AUTH_ERROR',
+          'Please sign in again'
+        );
+      }
+
       // Verify asset exists
       const assetExists = await this.verifyAsset(assetId);
       if (!assetExists) {
@@ -68,7 +96,17 @@ export const transactionService = {
         .eq('user_id', userId)
         .single();
 
-      if (userError || !userExists) {
+      if (userError) {
+        console.error('User verification error:', userError);
+        throw new TransactionError(
+          'User verification failed',
+          'USER_ERROR',
+          userError.message
+        );
+      }
+
+      if (!userExists) {
+        console.error('No profile found for user:', userId);
         throw new TransactionError(
           'User not found',
           'USER_NOT_FOUND',
@@ -82,6 +120,15 @@ export const transactionService = {
         reference: `${Date.now()}`
       };
       
+      console.log('Attempting to create transaction with data:', {
+        user_id: userId,
+        asset_id: assetId,
+        type: 'buy',
+        amount: amountTokens,
+        price_per_token: pricePerToken,
+        status: 'pending'
+      });
+
       const { data, error } = await supabase
         .from('transactions')
         .insert({
@@ -91,12 +138,21 @@ export const transactionService = {
           amount: amountTokens,
           price_per_token: pricePerToken,
           metadata,
-          status: 'pending'
+          status: 'pending',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         })
         .select()
         .single();
 
       if (error) {
+        console.error('Transaction creation error details:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint
+        });
+        
         // Handle specific database errors
         switch (error.code) {
           case '23503': // Foreign key violation
@@ -111,20 +167,28 @@ export const transactionService = {
               'INVALID_DATA',
               'The transaction amount or price must be greater than 0'
             );
+          case '42501': // Permission denied
+            throw new TransactionError(
+              'Permission denied',
+              'PERMISSION_ERROR',
+              'You do not have permission to create transactions'
+            );
           default:
             throw new TransactionError(
               'Failed to create transaction',
               'CREATE_ERROR',
-              error.message
+              `${error.message} (Code: ${error.code})`
             );
         }
       }
 
+      console.log('Transaction created successfully:', data);
       return data;
     } catch (error) {
+      console.error('Full error details:', error);
+      
       if (error instanceof TransactionError) throw error;
       
-      console.error('Unexpected error in createTransaction:', error);
       throw new TransactionError(
         'Failed to create transaction',
         'UNEXPECTED_ERROR',
@@ -222,81 +286,4 @@ export const transactionService = {
       );
     }
   },
-
-  // For development: Auto-approve transactions after 2 minutes
-  async setupAutoApproval(transactionId: string): Promise<void> {
-    setTimeout(async () => {
-      try {
-        // Fetch the transaction
-        const { data: tx, error: fetchError } = await supabase
-          .from('transactions')
-          .select()
-          .eq('id', transactionId)
-          .single();
-
-        if (fetchError) {
-          throw new TransactionError(
-            'Failed to fetch transaction',
-            'FETCH_ERROR',
-            fetchError.message
-          );
-        }
-
-        if (!tx) {
-          throw new TransactionError(
-            'Transaction not found',
-            'NOT_FOUND',
-            `Transaction with ID ${transactionId} does not exist`
-          );
-        }
-
-        if (tx.status !== 'pending') {
-          console.log('Transaction no longer pending, skipping auto-approval');
-          return;
-        }
-
-        // Update transaction status
-        const { error: updateError } = await supabase
-          .from('transactions')
-          .update({
-            status: 'completed',
-            completed_at: new Date().toISOString()
-          })
-          .eq('id', transactionId);
-
-        if (updateError) {
-          throw new TransactionError(
-            'Failed to update transaction',
-            'UPDATE_ERROR',
-            updateError.message
-          );
-        }
-
-        // Update user balance
-        const { error: balanceError } = await supabase
-          .from('user_balances')
-          .upsert({
-            user_id: tx.user_id,
-            asset_id: tx.asset_id,
-            balance: tx.amount,
-            last_transaction_at: new Date().toISOString()
-          }, {
-            onConflict: 'user_id,asset_id',
-            ignoreDuplicates: false
-          });
-
-        if (balanceError) {
-          throw new TransactionError(
-            'Failed to update balance',
-            'BALANCE_UPDATE_ERROR',
-            balanceError.message
-          );
-        }
-      } catch (error) {
-        console.error('Error in auto-approval process:', error);
-        // We don't throw here since this is in a setTimeout
-        // Instead, we could implement a retry mechanism or notification system
-      }
-    }, 120000); // 2 minutes
-  }
 }; 

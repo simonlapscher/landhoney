@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { formatCurrency } from '../../utils/format';
-import { Button } from '../../components/common/Button';
+import { format } from 'date-fns';
 
 interface Transaction {
   id: string;
@@ -12,56 +11,35 @@ interface Transaction {
   amount: number;
   price_per_token: number;
   status: 'pending' | 'completed' | 'failed' | 'cancelled';
-  asset: {
-    name: string;
-    symbol: string;
-  };
-  user: {
-    email: string;
-  };
+  asset_name: string;
+  asset_symbol: string;
+  user_email: string;
 }
 
 export const PendingTransactions: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
   const fetchTransactions = async () => {
     try {
       console.log('Fetching transactions...');
-      const { data: transactionData, error: fetchError } = await supabase
+      const { data, error } = await supabase
         .from('admin_transactions')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (fetchError) {
-        console.error('Error fetching transactions:', fetchError);
-        throw fetchError;
+      if (error) {
+        console.error('Error fetching transactions:', error);
+        throw error;
       }
-      
-      console.log('Transactions fetched:', transactionData);
-      
-      // Transform the data to match our expected format
-      const transactions = (transactionData || []).map(t => ({
-        ...t,
-        asset: {
-          name: t.asset_name,
-          symbol: t.asset_symbol
-        },
-        user: {
-          email: t.user_email
-        }
-      }));
 
-      console.log('Transformed transaction data:', transactions);
-      setTransactions(transactions);
+      console.log('Fetched transactions:', data);
+      setTransactions(data || []);
+      setError(null);
     } catch (err) {
-      console.error('Error details:', {
-        message: err instanceof Error ? err.message : 'Unknown error',
-        error: err
-      });
-      setError(err instanceof Error ? err.message : 'Failed to fetch transactions');
+      console.error('Error details:', { message: 'Unknown error', error: err });
+      setError('Failed to load transactions');
     } finally {
       setLoading(false);
     }
@@ -72,138 +50,92 @@ export const PendingTransactions: React.FC = () => {
   }, []);
 
   const handleAction = async (transactionId: string, action: 'approve' | 'reject') => {
-    if (processingIds.has(transactionId)) return;
-    
-    setProcessingIds(prev => new Set(Array.from(prev).concat(transactionId)));
-    
     try {
-      const transaction = transactions.find(t => t.id === transactionId);
-      if (!transaction) throw new Error('Transaction not found');
-
-      // Start a Supabase transaction
-      const { error: updateError } = await supabase.rpc('process_transaction', {
+      console.log('Processing transaction:', { transactionId, action });
+      
+      const { error } = await supabase.rpc('process_transaction', {
         p_transaction_id: transactionId,
-        p_action: action,
+        p_action: action
       });
 
-      if (updateError) throw updateError;
+      if (error) {
+        console.error('Error processing transaction:', error);
+        throw error;
+      }
 
       // Refresh the transactions list
       await fetchTransactions();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to process transaction');
-    } finally {
-      setProcessingIds(prev => {
-        const next = new Set(Array.from(prev));
-        next.delete(transactionId);
-        return next;
-      });
+      console.error('Failed to process transaction:', err);
+      setError('Failed to process transaction');
     }
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      hour12: true,
-    });
+    return format(new Date(dateString), 'MMM d, yyyy, h:mm a');
   };
 
   if (loading) {
-    return (
-      <div className="animate-pulse space-y-4">
-        <div className="h-8 bg-dark-3 rounded w-1/4"></div>
-        <div className="space-y-2">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-16 bg-dark-3 rounded"></div>
-          ))}
-        </div>
-      </div>
-    );
+    return <div>Loading transactions...</div>;
   }
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-light">Pending Transactions</h1>
-        <p className="mt-1 text-light/60">Review and approve pending transactions</p>
-      </div>
+      <h1 className="text-2xl font-bold mb-2">Pending Transactions</h1>
+      <p className="text-light/60 mb-6">Review and approve pending transactions</p>
 
       {error && (
-        <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-md p-4">
-          <p className="text-red-500">{error}</p>
+        <div className="bg-red-500/10 border border-red-500/20 text-red-500 p-4 rounded-lg mb-6">
+          {error}
         </div>
       )}
 
-      <div className="bg-dark-2 rounded-lg overflow-hidden">
-        {transactions.length > 0 ? (
-          <div>
-            {/* Headers */}
-            <div className="grid grid-cols-6 gap-4 p-4 text-light/60 border-b border-dark-3">
-              <div>User</div>
-              <div>Type</div>
-              <div>Asset</div>
-              <div>Amount</div>
-              <div>Date</div>
-              <div>Actions</div>
-            </div>
+      <div className="space-y-4">
+        <div className="grid grid-cols-5 gap-4 text-light/60 text-sm pb-2 border-b border-light/10">
+          <div>User</div>
+          <div>Type</div>
+          <div>Asset</div>
+          <div>Amount</div>
+          <div>Date</div>
+        </div>
 
-            {/* Transactions */}
-            <div className="divide-y divide-dark-3">
-              {transactions.map((transaction) => (
-                <div key={transaction.id} className="grid grid-cols-6 gap-4 p-4 items-center">
-                  <div className="text-light">
-                    {transaction.user.email}
-                  </div>
-                  <div className="text-light capitalize">
-                    {transaction.type}
-                  </div>
-                  <div className="text-light">
-                    {transaction.asset.symbol}
-                  </div>
-                  <div>
-                    <div className="text-light">
-                      {formatCurrency(transaction.amount * transaction.price_per_token)}
-                    </div>
-                    <div className="text-sm text-light/60">
-                      {transaction.amount} {transaction.asset.symbol}
-                    </div>
-                  </div>
-                  <div className="text-light">
-                    {formatDate(transaction.created_at)}
-                  </div>
-                  <div className="flex space-x-2">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      className="!bg-[#00D897] hover:!bg-[#00C085]"
-                      loading={processingIds.has(transaction.id)}
-                      onClick={() => handleAction(transaction.id, 'approve')}
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="!bg-[#3A3A3A] hover:!bg-[#454545] !text-light"
-                      loading={processingIds.has(transaction.id)}
-                      onClick={() => handleAction(transaction.id, 'reject')}
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
+        {transactions.length === 0 ? (
+          <div className="text-center text-light/60 py-8">
+            No pending transactions
           </div>
         ) : (
-          <div className="p-8 text-center text-light/60">
-            No pending transactions to review
-          </div>
+          transactions.map((transaction) => (
+            <div key={transaction.id} className="grid grid-cols-5 gap-4 items-center py-4">
+              <div className="text-light">{transaction.user_email}</div>
+              <div className="capitalize text-light">{transaction.type}</div>
+              <div className="text-light">{transaction.asset_symbol}</div>
+              <div>
+                <div className="text-light">${transaction.amount.toLocaleString()}</div>
+                <div className="text-sm text-light/60">
+                  {transaction.amount} {transaction.asset_symbol}
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="text-light/60">
+                  {formatDate(transaction.created_at)}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleAction(transaction.id, 'approve')}
+                    className="px-3 py-1 bg-[#00D54B] text-dark rounded hover:bg-[#00D54B]/90 transition-colors"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => handleAction(transaction.id, 'reject')}
+                    className="px-3 py-1 bg-[#3A3A3A] text-light/60 rounded hover:bg-[#3A3A3A]/90 transition-colors"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>

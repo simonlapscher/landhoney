@@ -156,11 +156,24 @@ CREATE POLICY "Asset prices are viewable by everyone" ON asset_prices
     FOR SELECT USING (true);
 
 -- Transactions: users can view their own
+DROP POLICY IF EXISTS "Users can view their own transactions" ON transactions;
+DROP POLICY IF EXISTS "Users can create transactions" ON transactions;
+
 CREATE POLICY "Users can view their own transactions" ON transactions
-    FOR SELECT USING (auth.uid() = user_id);
+    FOR SELECT 
+    USING (
+        auth.uid() = user_id OR 
+        (SELECT is_admin FROM auth.users WHERE id = auth.uid())
+    );
 
 CREATE POLICY "Users can create transactions" ON transactions
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
+    FOR INSERT 
+    WITH CHECK (
+        auth.uid() = user_id AND
+        EXISTS (
+            SELECT 1 FROM auth.users WHERE id = auth.uid()
+        )
+    );
 
 -- User Balances: users can view their own
 CREATE POLICY "Users can view their own balances" ON user_balances
