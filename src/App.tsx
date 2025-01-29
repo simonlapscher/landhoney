@@ -23,6 +23,9 @@ import { MarketingPreferences } from './components/legal/MarketingPreferences';
 import { SSNInput } from './components/onboarding/SSNInput';
 import { AssetDetail } from './components/invest';
 import { EmailVerification } from './components/onboarding/EmailVerification';
+import { AdminLayout } from './components/admin/AdminLayout';
+import { AdminLogin } from './pages/admin/Login';
+import { PendingTransactions } from './pages/admin/PendingTransactions';
 
 function App() {
   return (
@@ -35,6 +38,15 @@ function App() {
         <Route path="/terms" element={<TermsOfService />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/marketing" element={<MarketingPreferences />} />
+        
+        {/* Admin routes */}
+        <Route path="/admin">
+          <Route path="login" element={<AdminLogin />} />
+          <Route element={<AdminLayout />}>
+            <Route path="transactions" element={<PendingTransactions />} />
+            <Route index element={<Navigate to="transactions" replace />} />
+          </Route>
+        </Route>
         
         {/* Onboarding routes */}
         <Route path="/onboarding" element={<OnboardingLayout />}>
