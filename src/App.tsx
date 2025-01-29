@@ -22,6 +22,7 @@ import { PrivacyPolicy } from './components/legal/PrivacyPolicy';
 import { MarketingPreferences } from './components/legal/MarketingPreferences';
 import { SSNInput } from './components/onboarding/SSNInput';
 import { AssetDetail } from './components/invest';
+import { EmailVerification } from './components/onboarding/EmailVerification';
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
         <Route path="/onboarding" element={<OnboardingLayout />}>
           <Route index element={<Navigate to="create-account" replace />} />
           <Route path="create-account" element={<CreateAccount />} />
+          <Route path="verify" element={<EmailVerification />} />
           <Route path="country" element={<CountrySelection />} />
           <Route path="phone" element={<PhoneInput />} />
           <Route path="tax-info" element={<TaxInfo />} />

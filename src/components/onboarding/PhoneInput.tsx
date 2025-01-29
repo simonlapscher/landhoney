@@ -4,6 +4,7 @@ import { Input } from '../common/Input';
 import { Button } from '../common/Button';
 import { styles } from '../../utils/styles';
 import { DevicePhoneMobileIcon } from '@heroicons/react/24/outline';
+import { supabase } from '../../lib/supabase';
 
 export const PhoneInput: React.FC = () => {
   const navigate = useNavigate();
@@ -15,8 +16,16 @@ export const PhoneInput: React.FC = () => {
     setLoading(true);
     
     try {
-      // TODO: Store phone number in user metadata
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No user found');
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ phone })
+        .eq('user_id', user.id);
+
+      if (updateError) throw updateError;
+
       navigate('/onboarding/tax-info');
     } catch (error) {
       console.error('Error saving phone number:', error);

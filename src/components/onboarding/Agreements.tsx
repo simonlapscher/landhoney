@@ -3,14 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../common/Button';
 import { styles } from '../../utils/styles';
 import { ClipboardDocumentCheckIcon } from '@heroicons/react/24/outline';
+import { supabase } from '../../lib/supabase';
 
 export const Agreements: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [agreements, setAgreements] = useState({
-    terms: false,
-    privacy: false,
-    marketing: false
+    terms_accepted: false,
+    privacy_accepted: false,
+    marketing_accepted: false
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -18,8 +19,21 @@ export const Agreements: React.FC = () => {
     setLoading(true);
     
     try {
-      // TODO: Implement agreements submission
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No user found');
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          terms_accepted: agreements.terms_accepted,
+          privacy_accepted: agreements.privacy_accepted,
+          marketing_accepted: agreements.marketing_accepted,
+          agreements_date: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
+
+      if (updateError) throw updateError;
+
       navigate('/onboarding/complete');
     } catch (error) {
       console.error('Error submitting agreements:', error);
@@ -52,8 +66,8 @@ export const Agreements: React.FC = () => {
           <label className="flex items-center gap-3 cursor-pointer group">
             <input
               type="checkbox"
-              checked={agreements.terms}
-              onChange={() => handleChange('terms')}
+              checked={agreements.terms_accepted}
+              onChange={() => handleChange('terms_accepted')}
               className="min-w-[20px] min-h-[20px] w-5 h-5 text-primary focus:ring-primary rounded border-light/20"
             />
             <span className="text-light/80">
@@ -65,8 +79,8 @@ export const Agreements: React.FC = () => {
           <label className="flex items-center gap-3 cursor-pointer group">
             <input
               type="checkbox"
-              checked={agreements.privacy}
-              onChange={() => handleChange('privacy')}
+              checked={agreements.privacy_accepted}
+              onChange={() => handleChange('privacy_accepted')}
               className="min-w-[20px] min-h-[20px] w-5 h-5 text-primary focus:ring-primary rounded border-light/20"
             />
             <span className="text-light/80">
@@ -78,8 +92,8 @@ export const Agreements: React.FC = () => {
           <label className="flex items-center gap-3 cursor-pointer group">
             <input
               type="checkbox"
-              checked={agreements.marketing}
-              onChange={() => handleChange('marketing')}
+              checked={agreements.marketing_accepted}
+              onChange={() => handleChange('marketing_accepted')}
               className="min-w-[20px] min-h-[20px] w-5 h-5 text-primary focus:ring-primary rounded border-light/20"
             />
             <span className="flex-1 text-light whitespace-nowrap">
@@ -94,7 +108,7 @@ export const Agreements: React.FC = () => {
           size="lg"
           className="w-full"
           loading={loading}
-          disabled={!agreements.terms || !agreements.privacy}
+          disabled={!agreements.terms_accepted || !agreements.privacy_accepted}
         >
           Continue
         </Button>

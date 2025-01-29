@@ -74,13 +74,25 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose }) =>
         setIsSubmitting(true);
         setError(null);
         
+        console.log('Creating transaction for asset:', {
+          id: asset.id,
+          name: asset.name,
+          type: asset.type,
+          symbol: asset.symbol,
+          price_per_token: asset.price_per_token,
+          location: asset.location,
+          apr: asset.apr,
+          ltv: asset.ltv
+        });
+        
         const newTransaction = await transactionService.createTransaction(
           user.id,
-          asset,
+          asset.id,
           numericAmount,
           tokenAmount,
           platformFee,
-          paymentMethod
+          paymentMethod,
+          asset.price_per_token
         );
         
         setTransaction(newTransaction);

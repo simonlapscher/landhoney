@@ -15,40 +15,49 @@ export class TransactionError extends Error {
 
 export const transactionService = {
   async verifyAsset(assetId: string): Promise<boolean> {
-    const { data, error } = await supabase
-      .from('assets')
-      .select('id')
-      .eq('id', assetId)
-      .single();
+    console.log('Verifying asset with ID:', assetId);
+    try {
+      const { data, error } = await supabase
+        .from('assets')
+        .select('*')
+        .eq('id', assetId)
+        .maybeSingle();
 
-    if (error) {
-      if (error.code === 'PGRST116') return false;
-      throw new TransactionError(
-        'Failed to verify asset',
-        'ASSET_VERIFICATION_ERROR',
-        error.message
-      );
+      if (error) {
+        console.error('Asset verification error:', error);
+        throw new TransactionError(
+          'Failed to verify asset',
+          'ASSET_VERIFICATION_ERROR',
+          `Error: ${error.message}, Code: ${error.code}`
+        );
+      }
+
+      console.log('Asset verification result:', data);
+      return data !== null;
+    } catch (error) {
+      console.error('Asset verification error:', error);
+      return false;
     }
-
-    return !!data;
   },
 
   async createTransaction(
     userId: string,
-    asset: DebtAsset,
+    assetId: string,
     amountUsd: number,
     amountTokens: number,
     feeUsd: number,
-    paymentMethod: PaymentMethod
+    paymentMethod: PaymentMethod,
+    pricePerToken: number
   ): Promise<Transaction> {
     try {
       // Verify asset exists
-      const assetExists = await this.verifyAsset(asset.id);
+      const assetExists = await this.verifyAsset(assetId);
       if (!assetExists) {
+        console.error('Asset verification failed for ID:', assetId);
         throw new TransactionError(
           'Asset not found',
           'ASSET_NOT_FOUND',
-          `Asset with ID ${asset.id} does not exist`
+          `Asset with ID ${assetId} does not exist`
         );
       }
 
@@ -70,17 +79,17 @@ export const transactionService = {
       const metadata: TransactionMetadata = {
         payment_method: paymentMethod,
         fee_usd: feeUsd,
-        reference: `${asset.symbol}-${Date.now()}`
+        reference: `${Date.now()}`
       };
       
       const { data, error } = await supabase
         .from('transactions')
         .insert({
           user_id: userId,
-          asset_id: asset.id,
+          asset_id: assetId,
           type: 'buy',
           amount: amountTokens,
-          price_per_token: asset.price_per_token,
+          price_per_token: pricePerToken,
           metadata,
           status: 'pending'
         })

@@ -52,14 +52,17 @@ export const CreateAccount: React.FC = () => {
     }
 
     try {
-      const redirectTo = new URL('/onboarding/country', window.location.origin).toString();
+      const redirectTo = new URL('/onboarding/verify', window.location.origin).toString();
       console.log('Redirect URL:', redirectTo);
       
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
-          emailRedirectTo: redirectTo
+          emailRedirectTo: redirectTo,
+          data: {
+            needs_profile_creation: true // Add metadata to track profile creation
+          }
         }
       });
 

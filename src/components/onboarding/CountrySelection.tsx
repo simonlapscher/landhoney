@@ -5,6 +5,7 @@ import { styles } from '../../utils/styles';
 import { GlobeAltIcon, MagnifyingGlassIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
 import { Input } from '../common/Input';
 import { countries } from 'countries-list';
+import { supabase } from '../../lib/supabase';
 
 const ALL_COUNTRIES = Object.entries(countries).map(([code, country]) => ({
   value: code.toLowerCase(),
@@ -49,7 +50,16 @@ export const CountrySelection: React.FC = () => {
     setLoading(true);
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No user found');
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ country: selectedCountry })
+        .eq('user_id', user.id);
+
+      if (updateError) throw updateError;
+
       navigate('/onboarding/phone');
     } catch (error) {
       console.error('Error saving country selection:', error);

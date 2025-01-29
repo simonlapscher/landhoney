@@ -99,6 +99,7 @@ export const assetService = {
   },
 
   async getAssetById(id: string): Promise<Asset | null> {
+    console.log('Getting asset by ID:', id);
     const { data: asset, error } = await supabase
       .from('assets')
       .select(`
@@ -112,11 +113,17 @@ export const assetService = {
       .eq('id', id)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching asset:', error);
+      throw error;
+    }
     if (!asset) return null;
+
+    console.log('Raw asset data:', asset);
 
     if (asset.type === 'debt') {
       const debtDetails = asset.debt_assets[0];
+      console.log('Debt details:', debtDetails);
       
       // Calculate LTV as loan_amount / appraised_value
       const ltv = (debtDetails.loan_amount / debtDetails.appraised_value * 100).toFixed(1);
@@ -129,13 +136,30 @@ export const assetService = {
         'https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/TX-4.png'
       ] : [asset.main_image];
       
-      return {
+      const mappedAsset = {
+        id: asset.id,
         ...asset,
-        ...debtDetails,
+        debt_details: {
+          id: debtDetails.id,
+          apr: debtDetails.apr,
+          city: debtDetails.city,
+          state: debtDetails.state,
+          loan_amount: debtDetails.loan_amount,
+          appraised_value: debtDetails.appraised_value,
+          term_months: debtDetails.term_months
+        },
+        location: `${debtDetails.city}, ${debtDetails.state}`,
+        apr: debtDetails.apr,
         ltv: parseFloat(ltv),
         term: `${debtDetails.term_months} months`,
+        term_months: debtDetails.term_months,
+        loan_amount: debtDetails.loan_amount,
+        appraised_value: debtDetails.appraised_value,
         images: images
       } as DebtAsset;
+
+      console.log('Mapped debt asset:', mappedAsset);
+      return mappedAsset;
     } else {
       return {
         ...asset,
