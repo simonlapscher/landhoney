@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { WelcomeScreen } from './components/onboarding/WelcomeScreen';
 import { OnboardingLayout } from './components/layouts/OnboardingLayout';
@@ -29,7 +29,22 @@ import { AdminLogin } from './pages/admin/Login';
 import { PendingTransactions } from './pages/admin/PendingTransactions';
 import { AuthProvider } from './lib/context/AuthContext';
 
-function App() {
+const App: React.FC = () => {
+  useEffect(() => {
+    const updateTitle = () => {
+      const path = window.location.pathname;
+      if (path.startsWith('/admin')) {
+        document.title = 'Landhoney - Admin';
+      } else {
+        document.title = 'Landhoney';
+      }
+    };
+
+    updateTitle();
+    window.addEventListener('popstate', updateTitle);
+    return () => window.removeEventListener('popstate', updateTitle);
+  }, []);
+
   return (
     <AuthProvider>
       <BrowserRouter>
@@ -81,6 +96,6 @@ function App() {
       </BrowserRouter>
     </AuthProvider>
   );
-}
+};
 
 export default App;

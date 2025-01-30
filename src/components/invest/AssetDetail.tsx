@@ -5,6 +5,8 @@ import { ImageGallery } from '../common/ImageGallery';
 import { InvestmentBox } from './InvestmentBox';
 import { Asset, DebtAsset } from '../../lib/types/asset';
 import { assetService } from '../../lib/services/assetService';
+import { transactionService } from '../../lib/services/transactionService';
+import { useAuth } from '../../lib/context/AuthContext';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 
 function classNames(...classes: string[]) {
@@ -15,7 +17,8 @@ export const AssetDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [asset, setAsset] = useState<Asset | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [userBalance, setUserBalance] = useState(0);
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchAsset = async () => {
@@ -24,10 +27,8 @@ export const AssetDetail: React.FC = () => {
         setLoading(true);
         const data = await assetService.getAssetById(id);
         setAsset(data);
-        setError(null);
       } catch (err) {
         console.error('Error fetching asset:', err);
-        setError('Failed to load asset details. Please try again later.');
       } finally {
         setLoading(false);
       }
@@ -36,26 +37,28 @@ export const AssetDetail: React.FC = () => {
     fetchAsset();
   }, [id]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <LoadingSpinner />
-      </div>
-    );
-  }
+  useEffect(() => {
+    const fetchUserBalance = async () => {
+      if (!user || !asset) return;
+      try {
+        console.log('Fetching balances for user:', user.id);
+        const balances = await transactionService.getUserBalances(user.id);
+        console.log('User balances:', balances);
+        const assetBalance = balances.find(b => b.asset_id === asset.id);
+        console.log('Found balance for this asset:', assetBalance);
+        setUserBalance(assetBalance?.balance || 0);
+      } catch (err) {
+        console.error('Error fetching user balance:', err);
+      }
+    };
 
-  if (error || !asset) {
+    fetchUserBalance();
+  }, [user, asset]);
+
+  if (loading || !asset) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center">
-          <p className="text-light/60">{error || 'Asset not found'}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-4 text-primary hover:text-primary-light"
-          >
-            Retry
-          </button>
-        </div>
+        <LoadingSpinner />
       </div>
     );
   }
@@ -84,6 +87,9 @@ export const AssetDetail: React.FC = () => {
               <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-sm">
                 Active
               </span>
+            </div>
+            <div className="text-lg font-secondary text-light/60 mb-4">
+              {asset.symbol}
             </div>
             <p className="text-light/60">{asset.description}</p>
           </div>
@@ -181,7 +187,7 @@ export const AssetDetail: React.FC = () => {
           {asset.type === 'debt' && (
             <InvestmentBox
               asset={asset as DebtAsset}
-              userBalance={0}
+              userBalance={userBalance}
               onInvest={() => {}}
               onSell={() => {}}
             />

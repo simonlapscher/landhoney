@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { InformationCircleIcon } from '@heroicons/react/24/outline';
 import { Tooltip } from '../common/Tooltip';
 import { DebtAsset } from '../../lib/types/asset';
 import { Modal } from '../common/Modal';
@@ -39,20 +40,26 @@ export const InvestmentBox: React.FC<InvestmentBoxProps> = ({
         {/* Key Metrics */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="flex flex-col items-center">
-            <Tooltip content="Annual Percentage Rate - The yearly interest rate charged on the loan">
-              <div className="text-center">
-                <p className="text-2xl text-light font-medium">{asset.apr}%</p>
-                <p className="text-sm text-light/60 mt-1">APR</p>
+            <div className="text-center w-full">
+              <p className="text-2xl text-light font-medium">{asset.apr}%</p>
+              <div className="flex items-center justify-center gap-1 mt-1">
+                <p className="text-sm text-light/60">APR</p>
+                <Tooltip content="Annual Percentage Rate - The yearly interest rate charged on the loan">
+                  <InformationCircleIcon className="w-4 h-4 text-light/60 cursor-help" />
+                </Tooltip>
               </div>
-            </Tooltip>
+            </div>
           </div>
           <div className="flex flex-col items-center">
-            <Tooltip content="Loan to Value - The ratio of the loan amount to the property's value">
-              <div className="text-center">
-                <p className="text-2xl text-light font-medium">{asset.ltv}%</p>
-                <p className="text-sm text-light/60 mt-1">LTV</p>
+            <div className="text-center w-full">
+              <p className="text-2xl text-light font-medium">{asset.ltv}%</p>
+              <div className="flex items-center justify-center gap-1 mt-1">
+                <p className="text-sm text-light/60">LTV</p>
+                <Tooltip content="Loan to Value - The ratio of the loan amount to the property's value">
+                  <InformationCircleIcon className="w-4 h-4 text-light/60 cursor-help" />
+                </Tooltip>
               </div>
-            </Tooltip>
+            </div>
           </div>
           <div className="flex flex-col items-center">
             <div className="text-center">
@@ -66,15 +73,14 @@ export const InvestmentBox: React.FC<InvestmentBoxProps> = ({
         <div className="space-y-2 mb-6">
           <div className="w-full bg-dark rounded-full h-2">
             <div
-              className="bg-primary h-2 rounded-full"
+              className="bg-[#00D54B] h-2 rounded-full transition-all duration-500"
               style={{ width: `${percentageFunded}%` }}
             />
           </div>
-          <div className="flex justify-between text-sm">
+          <div className="flex justify-end text-sm">
             <span className="text-light/60">
               ${remainingAmount.toLocaleString()} remaining
             </span>
-            <span className="text-light/60">{Math.round(percentageFunded)}%</span>
           </div>
         </div>
 

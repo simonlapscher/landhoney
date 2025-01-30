@@ -227,15 +227,30 @@ export const transactionService = {
 
   async getUserBalances(userId: string): Promise<AssetBalance[]> {
     try {
+      console.log('Getting balances for user ID:', userId);
+      
+      // Log the query we're about to execute
+      console.log('Executing query on user_balances table with user_id:', userId);
+      
       const { data, error } = await supabase
         .from('user_balances')
         .select(`
           *,
-          asset:assets(*)
+          asset:assets(
+            *,
+            debt_assets(
+              id,
+              apr,
+              term_months,
+              loan_amount,
+              appraised_value
+            )
+          )
         `)
         .eq('user_id', userId);
 
       if (error) {
+        console.error('Database error when fetching balances:', error);
         throw new TransactionError(
           'Failed to fetch balances',
           'FETCH_ERROR',
@@ -243,7 +258,14 @@ export const transactionService = {
         );
       }
 
-      return data;
+      if (!data || data.length === 0) {
+        console.log('No balances found in database for user:', userId);
+      } else {
+        console.log('Found balances:', data.length, 'records');
+        console.log('Balance records:', data);
+      }
+
+      return data || [];
     } catch (error) {
       console.error('Error in getUserBalances:', error);
       throw new TransactionError(
@@ -256,6 +278,14 @@ export const transactionService = {
 
   async getUserBalance(userId: string, assetId: string): Promise<number> {
     try {
+      console.log('Getting balance for user ID:', userId, 'and asset ID:', assetId);
+      
+      // Log the query we're about to execute
+      console.log('Executing query on user_balances table with filters:', {
+        user_id: userId,
+        asset_id: assetId
+      });
+      
       const { data, error } = await supabase
         .from('user_balances')
         .select('balance')
@@ -264,7 +294,11 @@ export const transactionService = {
         .single();
 
       if (error) {
-        if (error.code === 'PGRST116') return 0; // No balance found
+        if (error.code === 'PGRST116') {
+          console.log('No balance record found in database for user:', userId, 'and asset:', assetId);
+          return 0;
+        }
+        console.error('Database error when fetching balance:', error);
         throw new TransactionError(
           'Failed to fetch balance',
           'FETCH_ERROR',
@@ -272,6 +306,12 @@ export const transactionService = {
         );
       }
 
+      if (!data) {
+        console.log('No balance data returned (but no error) for user:', userId, 'and asset:', assetId);
+        return 0;
+      }
+
+      console.log('Found balance record:', data);
       return data.balance;
     } catch (error) {
       if (error instanceof TransactionError) throw error;

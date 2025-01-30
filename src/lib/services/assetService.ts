@@ -12,7 +12,25 @@ export const assetService = {
       .from('assets')
       .select(`
         *,
-        debt_assets(*),
+        debt_assets(
+          id,
+          apr,
+          term_months,
+          loan_amount,
+          appraised_value,
+          status,
+          address,
+          city,
+          state,
+          zip_code,
+          country,
+          images,
+          documents,
+          metadata
+        ),
+        user_balances(
+          balance
+        ),
         asset_prices(
           price,
           timestamp
@@ -36,28 +54,20 @@ export const assetService = {
         const debtDetails = asset.debt_assets[0];
         console.log('Raw debt details before conversion:', debtDetails);
         
-        // Combine city and state for location
+        // Combine address components for location
         const location = `${debtDetails.city}, ${debtDetails.state}`;
-        
-        // Add image gallery for Beverly Hills property
-        const images = debtDetails.city === 'Beverly Hills' ? [
-          'https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/TX-1.png',
-          'https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/TX-2.png',
-          'https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/TX-3.png',
-          'https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/TX-4.png'
-        ] : [asset.main_image];
         
         // Calculate LTV as loan_amount / appraised_value
         const ltv = (debtDetails.loan_amount / debtDetails.appraised_value * 100).toFixed(1);
         
-        // Calculate funding values using loan_amount
+        // Calculate funding values using loan_amount and user balances
         const fundingGoal = debtDetails.loan_amount;
-        // For now, assume no investments yet
-        const fundedAmount = 0;
+        const fundedAmount = asset.user_balances?.reduce((sum: number, balance: { balance: number }) => 
+          sum + (balance.balance || 0), 0) || 0;
         const remainingAmount = fundingGoal - fundedAmount;
         
         const numericValues = {
-          apr: parseFloat(debtDetails.apr) || 0,
+          apr: parseFloat(debtDetails.apr.toString()),
           ltv: parseFloat(ltv) || 0,
           funding_goal: fundingGoal,
           funded_amount: fundedAmount,
@@ -78,11 +88,13 @@ export const assetService = {
           ltv: numericValues.ltv,
           term: `${debtDetails.term_months} months`,
           term_months: debtDetails.term_months,
+          loan_amount: debtDetails.loan_amount,
+          appraised_value: debtDetails.appraised_value,
           funding_goal: numericValues.funding_goal,
           funded_amount: numericValues.funded_amount,
           remaining_amount: numericValues.remaining_amount,
           funding_progress: (numericValues.funded_amount / numericValues.funding_goal) * 100,
-          images: images
+          images: debtDetails.images || [asset.main_image]
         } as DebtAsset;
         
         console.log('Mapped debt asset:', mappedAsset);
@@ -90,9 +102,9 @@ export const assetService = {
       } else {
         return {
           ...asset,
-          asset_prices: asset.asset_prices.sort((a: AssetPrice, b: AssetPrice) => 
+          asset_prices: asset.asset_prices?.sort((a: AssetPrice, b: AssetPrice) => 
             new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-          ),
+          ) || [],
         } as CommodityAsset;
       }
     });
@@ -104,7 +116,25 @@ export const assetService = {
       .from('assets')
       .select(`
         *,
-        debt_assets(*),
+        debt_assets(
+          id,
+          apr,
+          term_months,
+          loan_amount,
+          appraised_value,
+          status,
+          address,
+          city,
+          state,
+          zip_code,
+          country,
+          images,
+          documents,
+          metadata
+        ),
+        user_balances(
+          balance
+        ),
         asset_prices(
           price,
           timestamp
@@ -125,37 +155,33 @@ export const assetService = {
       const debtDetails = asset.debt_assets[0];
       console.log('Debt details:', debtDetails);
       
+      // Combine address components for location
+      const location = `${debtDetails.city}, ${debtDetails.state}`;
+      
       // Calculate LTV as loan_amount / appraised_value
       const ltv = (debtDetails.loan_amount / debtDetails.appraised_value * 100).toFixed(1);
       
-      // Add image gallery for Beverly Hills property
-      const images = debtDetails.city === 'Beverly Hills' ? [
-        'https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/TX-1.png',
-        'https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/TX-2.png',
-        'https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/TX-3.png',
-        'https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/TX-4.png'
-      ] : [asset.main_image];
+      // Calculate funding values using loan_amount and user balances
+      const fundingGoal = debtDetails.loan_amount;
+      const fundedAmount = asset.user_balances?.reduce((sum: number, balance: { balance: number }) => 
+        sum + (balance.balance || 0), 0) || 0;
+      const remainingAmount = fundingGoal - fundedAmount;
       
       const mappedAsset = {
         id: asset.id,
         ...asset,
-        debt_details: {
-          id: debtDetails.id,
-          apr: debtDetails.apr,
-          city: debtDetails.city,
-          state: debtDetails.state,
-          loan_amount: debtDetails.loan_amount,
-          appraised_value: debtDetails.appraised_value,
-          term_months: debtDetails.term_months
-        },
-        location: `${debtDetails.city}, ${debtDetails.state}`,
-        apr: debtDetails.apr,
+        location,
+        apr: parseFloat(debtDetails.apr.toString()),
         ltv: parseFloat(ltv),
         term: `${debtDetails.term_months} months`,
         term_months: debtDetails.term_months,
         loan_amount: debtDetails.loan_amount,
         appraised_value: debtDetails.appraised_value,
-        images: images
+        funding_goal: fundingGoal,
+        funded_amount: fundedAmount,
+        remaining_amount: remainingAmount,
+        funding_progress: (fundedAmount / fundingGoal) * 100,
+        images: debtDetails.images || [asset.main_image]
       } as DebtAsset;
 
       console.log('Mapped debt asset:', mappedAsset);
@@ -163,9 +189,9 @@ export const assetService = {
     } else {
       return {
         ...asset,
-        asset_prices: asset.asset_prices.sort((a: AssetPrice, b: AssetPrice) => 
+        asset_prices: asset.asset_prices?.sort((a: AssetPrice, b: AssetPrice) => 
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        ),
+        ) || [],
       } as CommodityAsset;
     }
   },

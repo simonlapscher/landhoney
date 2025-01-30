@@ -295,18 +295,6 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose }) =>
           <div className="text-center text-light/60">Loading...</div>
         ) : (
           <>
-            {/* Only show edit button in review state */}
-            {widgetState === 'review' && (
-              <div className="flex justify-end">
-                <button
-                  onClick={handleEdit}
-                  className="text-primary hover:text-primary/80"
-                >
-                  <PencilIcon className="w-5 h-5" />
-                </button>
-              </div>
-            )}
-
             {/* You're Buying Section */}
             <div className="bg-light/5 p-4 rounded-xl">
               <h3 className="text-lg font-bold text-light mb-4">You're Buying</h3>
@@ -402,47 +390,54 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose }) =>
               </div>
             </div>
 
-            {/* Action Button and Fee Info */}
-            <div>
-              <button
-                onClick={handleSubmit}
-                disabled={!amount || isSubmitting || !!validationError}
-                className="w-full bg-[#00D54B] text-dark font-bold py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#00D54B]/90 transition-colors"
-              >
-                {isSubmitting ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Processing...
-                  </span>
-                ) : !amount ? (
-                  'Enter Amount'
-                ) : validationError ? (
-                  'Invalid Amount'
-                ) : widgetState === 'review' ? (
-                  'Confirm'
-                ) : (
-                  'Review'
+            {/* Investment limits info */}
+            <div className="flex flex-col gap-4 mt-2">
+              <div className="flex gap-2">
+                {widgetState === 'review' && (
+                  <button
+                    onClick={handleEdit}
+                    className="bg-light/10 hover:bg-light/20 text-light p-3 rounded-xl transition-colors"
+                  >
+                    <PencilIcon className="w-5 h-5" />
+                  </button>
                 )}
-              </button>
-              
-              {/* Investment limits info */}
-              <div className="flex flex-col gap-1 mt-2 text-sm text-light/60">
-                <div className="flex items-center justify-between">
-                  <span>Minimum investment:</span>
-                  <span>${asset.min_investment.toLocaleString()}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Maximum investment:</span>
-                  <span>${asset.max_investment.toLocaleString()}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Tooltip content="A 0.5% platform fee is applied to all investments">
-                    <span>Fee (0.5%)</span>
+                <button
+                  onClick={handleSubmit}
+                  disabled={!amount || isSubmitting || !!validationError}
+                  className={`${widgetState === 'review' ? 'flex-1' : 'w-full'} bg-[#00D54B] text-dark font-bold py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#00D54B]/90 transition-colors`}
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Processing...
+                    </span>
+                  ) : !amount ? (
+                    'Enter Amount'
+                  ) : validationError ? (
+                    'Invalid Amount'
+                  ) : widgetState === 'review' ? (
+                    'Confirm'
+                  ) : (
+                    'Review'
+                  )}
+                </button>
+              </div>
+
+              <div className="text-sm text-light/60">
+                <div className="flex items-center gap-2">
+                  <span>Fee (0.5%)</span>
+                  <Tooltip content="Platform fee charged on each transaction">
+                    <InformationCircleIcon className="w-4 h-4 text-light/60 cursor-help" />
                   </Tooltip>
+                  <span>=</span>
                   <span>${platformFee.toFixed(2)}</span>
+                </div>
+
+                <div className="mt-2">
+                  Min ${asset.min_investment.toLocaleString()} - Max ${asset.max_investment.toLocaleString()}
                 </div>
               </div>
             </div>

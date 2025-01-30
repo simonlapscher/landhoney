@@ -91,12 +91,12 @@ export const PendingTransactions: React.FC = () => {
       )}
 
       <div className="space-y-4">
-        <div className="grid grid-cols-5 gap-4 text-light/60 text-sm pb-2 border-b border-light/10">
-          <div>User</div>
-          <div>Type</div>
-          <div>Asset</div>
-          <div>Amount</div>
-          <div>Date</div>
+        <div className="grid grid-cols-12 gap-4 text-light/60 text-sm pb-2 border-b border-light/10">
+          <div className="col-span-3">User</div>
+          <div className="col-span-1">Type</div>
+          <div className="col-span-2">Asset</div>
+          <div className="col-span-2">Amount</div>
+          <div className="col-span-4">Actions</div>
         </div>
 
         {transactions.length === 0 ? (
@@ -105,18 +105,18 @@ export const PendingTransactions: React.FC = () => {
           </div>
         ) : (
           transactions.map((transaction) => (
-            <div key={transaction.id} className="grid grid-cols-5 gap-4 items-center py-4">
-              <div className="text-light">{transaction.user_email}</div>
-              <div className="capitalize text-light">{transaction.type}</div>
-              <div className="text-light">{transaction.asset_symbol}</div>
-              <div>
+            <div key={transaction.id} className="grid grid-cols-12 gap-4 items-center py-4">
+              <div className="col-span-3 text-light">{transaction.user_email}</div>
+              <div className="col-span-1 capitalize text-light">{transaction.type}</div>
+              <div className="col-span-2 text-light">{transaction.asset_symbol}</div>
+              <div className="col-span-2">
                 <div className="text-light">${transaction.amount.toLocaleString()}</div>
                 <div className="text-sm text-light/60">
                   {transaction.amount} {transaction.asset_symbol}
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <span className="text-light/60">
+              <div className="col-span-4 flex items-center justify-between">
+                <span className="text-light/60 whitespace-nowrap">
                   {formatDate(transaction.created_at)}
                 </span>
                 <div className="flex gap-2">

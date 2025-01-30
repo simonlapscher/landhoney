@@ -6,8 +6,9 @@ import { useNavigate } from 'react-router-dom';
 import { OrderDetailPopup } from './OrderDetailPopup';
 import { transactionService } from '../../lib/services/transactionService';
 import { useAuth } from '../../lib/context/AuthContext';
-import { Asset } from '../../lib/types/asset';
+import { Asset, DebtAsset } from '../../lib/types/asset';
 import { Transaction as BaseTransaction } from '../../lib/types/transaction';
+import { PortfolioAsset, CommodityAsset } from '../../types/portfolio';
 
 interface TransactionWithAsset extends BaseTransaction {
   asset: {
@@ -15,14 +16,12 @@ interface TransactionWithAsset extends BaseTransaction {
     symbol: string;
     main_image: string;
     price_per_token: number;
+    type: 'debt' | 'commodity';
+    apr?: number;
+    id: string;
+    created_at: string;
+    updated_at: string;
   };
-}
-
-interface PortfolioAsset {
-  name: string;
-  symbol: string;
-  main_image: string;
-  price_per_token: number;
 }
 
 interface Transaction extends Omit<BaseTransaction, 'type'> {
@@ -43,14 +42,20 @@ interface PortfolioBalance {
   asset: PortfolioAsset;
 }
 
+const isDebtAsset = (asset: Asset): asset is DebtAsset => {
+  return asset.type === 'debt';
+};
+
 export const Portfolio: React.FC = () => {
   const navigate = useNavigate();
   const { originalUser, user, isLoading: authLoading } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [balances, setBalances] = useState<PortfolioBalance[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [assetType, setAssetType] = useState<'all' | 'debt' | 'commodities'>('all');
 
   console.log('Portfolio component state:', {
     hasOriginalUser: !!originalUser,
@@ -58,12 +63,13 @@ export const Portfolio: React.FC = () => {
     currentUserEmail: user?.email,
     authLoading,
     loading,
+    isRefreshing,
     error,
     transactionsCount: transactions.length,
     balancesCount: balances.length
   });
 
-  const fetchPortfolioData = async () => {
+  const fetchPortfolioData = async (isBackgroundRefresh = false) => {
     if (!originalUser) {
       console.log('No original user found in Portfolio');
       setError('No authenticated user');
@@ -72,73 +78,86 @@ export const Portfolio: React.FC = () => {
     }
 
     try {
-      setLoading(true);
+      if (!isBackgroundRefresh) {
+        setLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
       setError(null);
 
       console.log('Fetching portfolio data for user:', {
         email: originalUser.email,
-        id: originalUser.id
+        id: originalUser.id,
+        isBackgroundRefresh
       });
 
-      const transactionsData = await transactionService.getUserTransactions(originalUser.id) as TransactionWithAsset[];
-      const balancesData = await transactionService.getUserBalances(originalUser.id);
+      const [transactionsData, balancesData] = await Promise.all([
+        transactionService.getUserTransactions(originalUser.id) as Promise<TransactionWithAsset[]>,
+        transactionService.getUserBalances(originalUser.id)
+      ]);
 
-      console.log('API Response data:', {
-        transactionsCount: transactionsData.length,
-        balancesCount: balancesData.length,
-        sampleTransaction: transactionsData[0],
-        sampleBalance: balancesData[0]
-      });
+      console.log('Raw balances data:', balancesData);
 
-      // Filter out non-buy/sell transactions and map to Portfolio Transaction type
-      const filteredTransactions = transactionsData
-        .filter(t => t.type === 'buy' || t.type === 'sell')
-        .map(t => ({
+      if (transactionsData && balancesData) {
+        const mappedTransactions = transactionsData.map(t => ({
           ...t,
-          type: t.type as 'buy' | 'sell',
           asset: {
-            name: t.asset.name,
-            symbol: t.asset.symbol,
-            main_image: t.asset.main_image,
-            price_per_token: t.asset.price_per_token
+            ...t.asset,
+            type: t.asset.symbol.startsWith('DEBT') ? 'debt' : 'commodity',
+            id: t.asset_id,
+            created_at: t.created_at,
+            updated_at: t.updated_at
           }
-        }));
+        })) as Transaction[];
 
-      // Map balances to Portfolio Balance type
-      const mappedBalances = balancesData
-        .filter(b => Number(b.balance) > 0)
-        .map(b => ({
-          id: b.id,
-          user_id: b.user_id,
-          asset_id: b.asset_id,
-          balance: Number(b.balance),
-          total_value: Number(b.balance) * Number(b.asset.price_per_token),
-          total_interest_earned: Number(b.total_interest_earned),
-          created_at: b.created_at,
-          updated_at: b.updated_at,
-          last_transaction_at: b.last_transaction_at || null,
-          asset: {
-            name: b.asset.name,
-            symbol: b.asset.symbol,
-            main_image: b.asset.main_image,
-            price_per_token: b.asset.price_per_token
-          }
-        })) as PortfolioBalance[];
+        const mappedBalances = balancesData
+          .filter(b => Number(b.balance) > 0)
+          .map(b => {
+            console.log('Raw asset details:', {
+              symbol: b.asset.symbol,
+              type: b.asset.symbol.startsWith('DEBT') ? 'debt' : 'commodity',
+              debtDetails: b.asset.debt_assets?.[0],
+              rawAsset: b.asset
+            });
+            
+            const isDebtAsset = b.asset.symbol.startsWith('DEBT');
+            const debtDetails = isDebtAsset ? b.asset.debt_assets?.[0] : null;
+            
+            const asset: PortfolioAsset = {
+              ...b.asset,
+              type: isDebtAsset ? 'debt' : 'commodity',
+              price_per_token: Number(b.asset.price_per_token),
+              apr: debtDetails?.apr
+            };
+            return {
+              id: b.id,
+              user_id: b.user_id,
+              asset_id: b.asset_id,
+              balance: Number(b.balance),
+              total_value: Number(b.balance) * Number(b.asset.price_per_token),
+              total_interest_earned: Number(b.total_interest_earned),
+              created_at: b.created_at,
+              updated_at: b.updated_at,
+              last_transaction_at: b.last_transaction_at || null,
+              asset
+            };
+          }) as PortfolioBalance[];
 
-      console.log('Processed data:', {
-        filteredTransactionsCount: filteredTransactions.length,
-        mappedBalancesCount: mappedBalances.length,
-        sampleFilteredTransaction: filteredTransactions[0],
-        sampleMappedBalance: mappedBalances[0]
-      });
+        console.log('Mapped balances:', mappedBalances);
 
-      setTransactions(filteredTransactions);
-      setBalances(mappedBalances);
+        setTransactions(mappedTransactions);
+        setBalances(mappedBalances);
+      }
     } catch (err) {
       console.error('Error fetching portfolio data:', err);
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      if (!isBackgroundRefresh) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      }
     } finally {
-      setLoading(false);
+      if (!isBackgroundRefresh) {
+        setLoading(false);
+      }
+      setIsRefreshing(false);
     }
   };
 
@@ -149,22 +168,34 @@ export const Portfolio: React.FC = () => {
     });
     
     if (originalUser) {
-      fetchPortfolioData();
+      fetchPortfolioData(false);
     }
   }, [originalUser]);
 
-  // Refresh data periodically
   useEffect(() => {
     if (!originalUser) return;
 
     const interval = setInterval(() => {
-      fetchPortfolioData();
-    }, 30000); // Refresh every 30 seconds
+      fetchPortfolioData(true);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [originalUser]);
 
   const totalPortfolioValue = balances.reduce((sum, balance) => sum + Number(balance.total_value), 0);
+  
+  const getCategoryTotal = (category: 'debt' | 'commodities') => {
+    return balances
+      .filter(balance => 
+        category === 'debt' 
+          ? balance.asset.type === 'debt'
+          : balance.asset.type === 'commodity'
+      )
+      .reduce((sum, balance) => sum + balance.total_value, 0);
+  };
+
+  const debtTotal = getCategoryTotal('debt');
+  const commoditiesTotal = getCategoryTotal('commodities');
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -195,7 +226,6 @@ export const Portfolio: React.FC = () => {
   };
 
   const handleTransactionClick = (transaction: Transaction, e: React.MouseEvent) => {
-    // Check if the click was on a button or its parent
     const target = e.target as HTMLElement;
     if (target.closest('button')) {
       return;
@@ -203,7 +233,14 @@ export const Portfolio: React.FC = () => {
     setSelectedTransaction(transaction);
   };
 
-  if (loading) {
+  const filteredBalances = balances.filter(balance => {
+    if (assetType === 'all') return true;
+    if (assetType === 'debt') return balance.asset.type === 'debt';
+    if (assetType === 'commodities') return balance.asset.type === 'commodity';
+    return true;
+  });
+
+  if (loading && !isRefreshing) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="animate-pulse">
@@ -231,62 +268,139 @@ export const Portfolio: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Portfolio Value */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-semibold text-light">Portfolio</h1>
-        <p className="mt-2 text-2xl font-medium text-light">
-          Total Value: {formatCurrency(totalPortfolioValue)}
-        </p>
+      <div className="space-y-8">
+        <div className="space-y-4">
+          <h1 className="text-3xl font-semibold text-light">My Assets</h1>
+          <p className="text-2xl font-medium text-light pl-1">
+            Total Value: {formatCurrency(totalPortfolioValue)}
+          </p>
+        </div>
+        
+        {/* Asset Type Filter */}
+        <div>
+          <div className="border-b border-light/10">
+            <nav className="flex space-x-8 pl-1">
+              {[
+                { id: 'all', label: 'All Assets' },
+                { id: 'debt', label: 'Debt' },
+                { id: 'commodities', label: 'Commodities' }
+              ].map((category) => (
+                <button
+                  key={category.id}
+                  className={`pb-4 text-base font-medium border-b-2 -mb-px ${
+                    assetType === category.id
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-light/60 hover:text-light/80 hover:border-light/30'
+                  }`}
+                  onClick={() => setAssetType(category.id as 'all' | 'debt' | 'commodities')}
+                >
+                  {category.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          {/* Category Subtotal */}
+          <div className="mt-6 pl-1">
+            <div className="text-2xl font-medium text-light">
+              {formatCurrency(
+                assetType === 'all'
+                  ? totalPortfolioValue
+                  : assetType === 'debt'
+                    ? debtTotal
+                    : commoditiesTotal
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Holdings */}
-      <div className="mb-12">
-        <h2 className="text-xl font-semibold mb-4 text-light">Your Holdings</h2>
+      <div className="mt-8 mb-12">
         <div className="bg-dark-2 rounded-lg overflow-hidden">
-          {balances.length > 0 ? (
-            <div className="divide-y divide-dark-3">
-              {balances.map((balance) => (
-                <div key={balance.asset_id} className="p-4 flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <img
-                      src={balance.asset.main_image}
-                      alt={balance.asset.name}
-                      className="w-12 h-12 rounded-full"
-                    />
+          {filteredBalances.length > 0 ? (
+            <div>
+              {/* Table Headers */}
+              <div className="grid grid-cols-4 gap-8 p-4 text-light text-base pl-5">
+                <div>Name</div>
+                <div>Balance</div>
+                <div>Current Price</div>
+                <div>APR</div>
+              </div>
+              
+              {/* Table Rows */}
+              <div>
+                {filteredBalances.map((balance) => (
+                  <div key={balance.asset_id} className="grid grid-cols-4 gap-8 p-4 items-center hover:bg-light/5">
+                    {/* Name Column */}
+                    <div className="flex items-center gap-4 pl-1">
+                      <img
+                        src={balance.asset.main_image}
+                        alt={balance.asset.name}
+                        className="w-12 h-12 rounded-full"
+                      />
+                      <div>
+                        <div className="text-lg font-primary text-light">
+                          {balance.asset.symbol}
+                        </div>
+                        <div className="text-sm font-secondary text-light/60">
+                          Los Angeles, CA
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Balance Column */}
                     <div>
-                      <h3 className="font-medium text-light">{balance.asset.name}</h3>
-                      <p className="text-sm text-light/60">
-                        {balance.balance} {balance.asset.symbol}
-                      </p>
+                      <div className="text-lg font-primary text-light">
+                        {formatCurrency(balance.total_value)}
+                      </div>
+                      <div className="text-sm font-secondary text-light/60">
+                        {balance.balance.toLocaleString()} {balance.asset.symbol}
+                      </div>
+                    </div>
+
+                    {/* Current Price Column */}
+                    <div>
+                      <div className="text-lg font-primary text-light">
+                        {formatCurrency(balance.asset.price_per_token)}
+                      </div>
+                    </div>
+
+                    {/* APR Column */}
+                    <div>
+                      <div className="text-lg font-primary text-light">
+                        {balance.asset.type === 'debt'
+                          ? `${balance.asset.apr || 0}%`
+                          : '10%'
+                        }
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-medium text-light">
-                      {formatCurrency(Number(balance.total_value))}
-                    </p>
-                    <p className="text-sm text-light/60">
-                      {formatCurrency(Number(balance.asset.price_per_token))} per token
-                    </p>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           ) : (
-            <div className="p-8 text-center text-light/60">
-              <p>No holdings yet. Start investing to build your portfolio!</p>
+            <div className="flex flex-col items-center py-12">
+              <p className="text-light/60 text-lg mb-4">
+                You don't have any {assetType === 'all' ? 'assets' : assetType === 'debt' ? 'debt assets' : 'commodities'}.
+              </p>
+              <Button
+                variant="primary"
+                onClick={() => navigate('/app/invest')}
+                className="!bg-[#00D897] hover:!bg-[#00C085] px-8"
+              >
+                Buy {assetType === 'all' ? 'Assets' : assetType === 'debt' ? 'Debt' : 'Commodities'}
+              </Button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Transaction History */}
-      <div>
+      <div className="pl-1">
         <h2 className="text-xl font-semibold mb-4 text-light">Transaction History</h2>
         <div className="bg-dark-2 rounded-lg overflow-hidden">
           {transactions.length > 0 ? (
             <div>
-              {/* Column Headers */}
-              <div className="grid grid-cols-5 gap-4 p-4 text-light text-base">
+              <div className="grid grid-cols-5 gap-4 p-4 text-light text-base pl-5">
                 <div>Details</div>
                 <div>Amount</div>
                 <div>Date</div>
@@ -294,7 +408,6 @@ export const Portfolio: React.FC = () => {
                 <div>Actions</div>
               </div>
               
-              {/* Transactions */}
               <div className="divide-y divide-[#2A2A2A]">
                 {transactions.map((transaction, index) => (
                   <div
@@ -302,7 +415,6 @@ export const Portfolio: React.FC = () => {
                     className={`grid grid-cols-5 gap-4 p-4 items-center cursor-pointer hover:bg-dark-3/50`}
                     onClick={(e) => handleTransactionClick(transaction, e)}
                   >
-                    {/* Details Column */}
                     <div className="flex items-center space-x-3">
                       <img
                         src={transaction.asset.main_image}
@@ -316,7 +428,6 @@ export const Portfolio: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Amount Column */}
                     <div>
                       <p className="text-[#00D897] font-medium">
                         {formatCurrency(transaction.amount * transaction.price_per_token)}
@@ -326,18 +437,15 @@ export const Portfolio: React.FC = () => {
                       </p>
                     </div>
 
-                    {/* Date Column */}
                     <div className="text-light">
                       {formatDate(transaction.created_at)}
                     </div>
 
-                    {/* Status Column */}
                     <div className="flex items-center text-light">
                       {getStatusDot(transaction.status)}
                       <span className="capitalize">{transaction.status}</span>
                     </div>
 
-                    {/* Actions Column */}
                     <div className="flex space-x-2">
                       <Button
                         variant="primary"
@@ -374,7 +482,6 @@ export const Portfolio: React.FC = () => {
         </div>
       </div>
 
-      {/* Order Detail Popup */}
       <OrderDetailPopup
         isOpen={selectedTransaction !== null}
         onClose={() => setSelectedTransaction(null)}
