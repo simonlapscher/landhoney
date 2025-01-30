@@ -45,15 +45,27 @@ interface PortfolioBalance {
 
 export const Portfolio: React.FC = () => {
   const navigate = useNavigate();
-  const { originalUser } = useAuth();
+  const { originalUser, user, isLoading: authLoading } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [balances, setBalances] = useState<PortfolioBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
+  console.log('Portfolio component state:', {
+    hasOriginalUser: !!originalUser,
+    originalUserEmail: originalUser?.email,
+    currentUserEmail: user?.email,
+    authLoading,
+    loading,
+    error,
+    transactionsCount: transactions.length,
+    balancesCount: balances.length
+  });
+
   const fetchPortfolioData = async () => {
     if (!originalUser) {
+      console.log('No original user found in Portfolio');
       setError('No authenticated user');
       setLoading(false);
       return;
@@ -63,13 +75,20 @@ export const Portfolio: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      console.log('Fetching portfolio data for user:', originalUser.email);
+      console.log('Fetching portfolio data for user:', {
+        email: originalUser.email,
+        id: originalUser.id
+      });
 
       const transactionsData = await transactionService.getUserTransactions(originalUser.id) as TransactionWithAsset[];
       const balancesData = await transactionService.getUserBalances(originalUser.id);
 
-      console.log('Received transactions:', transactionsData.length);
-      console.log('Received balances:', balancesData.length);
+      console.log('API Response data:', {
+        transactionsCount: transactionsData.length,
+        balancesCount: balancesData.length,
+        sampleTransaction: transactionsData[0],
+        sampleBalance: balancesData[0]
+      });
 
       // Filter out non-buy/sell transactions and map to Portfolio Transaction type
       const filteredTransactions = transactionsData
@@ -106,8 +125,12 @@ export const Portfolio: React.FC = () => {
           }
         })) as PortfolioBalance[];
 
-      console.log('Setting filtered transactions:', filteredTransactions.length);
-      console.log('Setting mapped balances:', mappedBalances.length);
+      console.log('Processed data:', {
+        filteredTransactionsCount: filteredTransactions.length,
+        mappedBalancesCount: mappedBalances.length,
+        sampleFilteredTransaction: filteredTransactions[0],
+        sampleMappedBalance: mappedBalances[0]
+      });
 
       setTransactions(filteredTransactions);
       setBalances(mappedBalances);
@@ -120,6 +143,11 @@ export const Portfolio: React.FC = () => {
   };
 
   useEffect(() => {
+    console.log('Portfolio useEffect triggered:', {
+      hasOriginalUser: !!originalUser,
+      originalUserEmail: originalUser?.email
+    });
+    
     if (originalUser) {
       fetchPortfolioData();
     }

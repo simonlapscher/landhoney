@@ -5,7 +5,7 @@ import { DebtAsset } from '../../lib/types/asset';
 import { Tooltip } from '../common/Tooltip';
 import { useNavigate } from 'react-router-dom';
 import { transactionService } from '../../lib/services/transactionService';
-import { useUser } from '../../hooks/useUser';
+import { useAuth } from '../../lib/context/AuthContext';
 import { Transaction } from '../../lib/types/transaction';
 
 interface InvestWidgetProps {
@@ -22,7 +22,7 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose }) =>
   const [paymentMethod, setPaymentMethod] = useState<'USD' | 'USDC'>('USD');
   const [widgetState, setWidgetState] = useState<WidgetState>('input');
   const [copySuccess, setCopySuccess] = useState(false);
-  const { user, loading } = useUser();
+  const { originalUser, isLoading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +45,7 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose }) =>
 
   // Validation checks
   const validateAmount = () => {
-    if (!user) {
+    if (!originalUser) {
       setValidationError('Please sign in to invest');
       return false;
     }
@@ -74,20 +74,17 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose }) =>
         setIsSubmitting(true);
         setError(null);
         
-        if (!user) {
+        if (!originalUser) {
           throw new Error('Please sign in to invest');
         }
         
-        console.log('Creating transaction for asset:', {
-          id: asset.id,
-          name: asset.name,
-          type: asset.type,
-          symbol: asset.symbol,
-          price_per_token: asset.price_per_token
+        console.log('Creating transaction for user:', {
+          email: originalUser.email,
+          id: originalUser.id
         });
         
         const newTransaction = await transactionService.createTransaction(
-          user.id,
+          originalUser.id,
           asset.id,
           numericAmount,
           tokenAmount,
@@ -130,7 +127,7 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose }) =>
               <p>Routing: 987654321</p>
               <div className="flex items-center gap-1">
                 <div className="flex items-center">
-                  <Tooltip content="Please add this payment reference to your transfer details to avoid rejection" position="right">
+                  <Tooltip content="Please add this payment reference to your transfer details to avoid rejection">
                     <p>Reference: {transaction.metadata.reference}</p>
                   </Tooltip>
                 </div>
@@ -294,7 +291,7 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose }) =>
         )}
 
         {/* Show loading state if checking user auth */}
-        {loading ? (
+        {isLoading ? (
           <div className="text-center text-light/60">Loading...</div>
         ) : (
           <>

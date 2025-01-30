@@ -28,29 +28,76 @@ export const useAuth = () => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
-  const [originalSession, setOriginalSession] = useState<Session | null>(null);
+  const [originalSession, setOriginalSession] = useState<Session | null>(() => {
+    const stored = localStorage.getItem('originalSession');
+    return stored ? JSON.parse(stored) : null;
+  });
   const [isLoading, setIsLoading] = useState(true);
+
+  // Function to safely set original session
+  const setOriginalSessionWithStorage = (newSession: Session | null) => {
+    if (newSession) {
+      localStorage.setItem('originalSession', JSON.stringify(newSession));
+    } else {
+      localStorage.removeItem('originalSession');
+    }
+    setOriginalSession(newSession);
+  };
 
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+      console.log('Initial auth session:', {
+        email: initialSession?.user?.email,
+        id: initialSession?.user?.id
+      });
+      
       setSession(initialSession);
-      // Only set original session if it hasn't been set yet
-      setOriginalSession(prev => prev || initialSession);
+      
+      // Only set original session if we don't have one stored
+      const storedSession = localStorage.getItem('originalSession');
+      if (!storedSession && initialSession) {
+        console.log('Setting original session:', {
+          email: initialSession.user?.email,
+          id: initialSession.user?.id
+        });
+        setOriginalSessionWithStorage(initialSession);
+      }
+      
       setIsLoading(false);
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      console.log('Auth state changed - user:', newSession?.user?.email);
+      console.log('Auth state changed:', {
+        event: _event,
+        email: newSession?.user?.email,
+        id: newSession?.user?.id,
+        hasOriginalSession: !!originalSession
+      });
+      
       setSession(newSession);
-      // Do not update originalSession here - it should stay fixed
+      
+      // Set original session if we don't have one and this is a new sign in
+      const storedSession = localStorage.getItem('originalSession');
+      if (!storedSession && newSession && _event === 'SIGNED_IN') {
+        console.log('Setting original session from auth change:', {
+          email: newSession.user?.email,
+          id: newSession.user?.id
+        });
+        setOriginalSessionWithStorage(newSession);
+      }
+
+      // Clear original session on sign out
+      if (_event === 'SIGNED_OUT') {
+        setOriginalSessionWithStorage(null);
+      }
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, []); // Remove originalSession dependency since we're using localStorage
 
   const value = {
     session,
@@ -59,6 +106,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     originalUser: originalSession?.user ?? null,
     isLoading,
   };
+
+  console.log('Auth context value:', {
+    currentUser: value.user?.email,
+    originalUser: value.originalUser?.email,
+    isLoading
+  });
 
   return (
     <AuthContext.Provider value={value}>

@@ -90,11 +90,9 @@ export const transactionService = {
       }
 
       // Verify user exists (this should be handled by RLS, but double-check)
-      const { data: userExists, error: userError } = await supabase
-        .from('profiles')
-        .select('user_id')
-        .eq('user_id', userId)
-        .single();
+      const { data: userExists, error: userError } = await supabase.rpc('get_user_profile', {
+        p_user_id: userId
+      });
 
       if (userError) {
         console.error('User verification error:', userError);
