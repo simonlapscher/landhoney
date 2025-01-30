@@ -13,7 +13,6 @@ import {
 } from './components/onboarding/OnboardingComponents';
 import { Login } from './components/onboarding/Login';
 import {
-  Profile,
   Portfolio,
   Invest,
   LiquidReserve,
@@ -28,6 +27,7 @@ import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminLogin } from './pages/admin/Login';
 import { PendingTransactions } from './pages/admin/PendingTransactions';
 import { AuthProvider } from './lib/context/AuthContext';
+import { ProfilePage } from './components/profile/ProfilePage';
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -83,7 +83,7 @@ const App: React.FC = () => {
           {/* Protected app routes */}
           <Route path="/app" element={<ProtectedLayout />}>
             <Route index element={<Navigate to="portfolio" replace />} />
-            <Route path="profile" element={<Profile />} />
+            <Route path="profile" element={<ProfilePage />} />
             <Route path="portfolio" element={<Portfolio />} />
             <Route path="invest" element={<Invest />} />
             <Route path="invest/:id" element={<AssetDetail />} />

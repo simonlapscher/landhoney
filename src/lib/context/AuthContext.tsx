@@ -101,7 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const value = {
     session,
-    user: session?.user ?? null,
+    user: originalSession?.user ?? session?.user ?? null,
     originalSession,
     originalUser: originalSession?.user ?? null,
     isLoading,
