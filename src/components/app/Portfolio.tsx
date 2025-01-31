@@ -295,12 +295,14 @@ export const Portfolio: React.FC = () => {
     setSelectedTransaction(transaction);
   };
 
-  const filteredBalances = balances.filter(balance => {
-    if (assetType === 'all') return true;
-    if (assetType === 'debt') return balance.asset.type === 'debt';
-    if (assetType === 'commodities') return balance.asset.type === 'commodity';
-    return true;
-  });
+  const filteredBalances = balances
+    .filter(balance => {
+      if (assetType === 'all') return true;
+      if (assetType === 'debt') return balance.asset.type === 'debt';
+      if (assetType === 'commodities') return balance.asset.type === 'commodity';
+      return true;
+    })
+    .sort((a, b) => b.total_value - a.total_value);
 
   const handleStakeClick = (balance: PortfolioBalance) => {
     setSelectedHoneyAsset(balance);

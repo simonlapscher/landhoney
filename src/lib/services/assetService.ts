@@ -106,9 +106,7 @@ export const assetService = {
           asset_prices: asset.asset_prices?.sort((a: AssetPrice, b: AssetPrice) => 
             new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
           ) || [],
-          main_image: asset.symbol === 'HONEY' 
-            ? 'https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/Honey%20gradient.png'
-            : asset.main_image
+          main_image: asset.main_image
         } as CommodityAsset;
       }
     });
@@ -197,9 +195,7 @@ export const assetService = {
         asset_prices: asset.asset_prices?.sort((a: AssetPrice, b: AssetPrice) => 
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         ) || [],
-        main_image: asset.symbol === 'HONEY' 
-          ? 'https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/Honey%20gradient.png'
-          : asset.main_image
+        main_image: asset.main_image
       } as CommodityAsset;
       
       console.log('Mapped commodity asset:', commodityAsset);
