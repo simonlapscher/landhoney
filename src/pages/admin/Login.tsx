@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { adminSupabase } from '../../lib/supabase';
 import { checkAdminStatus } from '../../lib/adminAuth';
 import { useNavigate } from 'react-router-dom';
 import { Input } from '../../components/common/Input';
@@ -18,21 +18,21 @@ export const AdminLogin: React.FC = () => {
     setLoading(true);
 
     try {
-      console.log('Starting login process...');
+      console.log('Starting admin login process...');
       
-      // First, try to sign in
-      console.log('Attempting sign in with:', email);
-      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+      // First, try to sign in using admin client
+      console.log('Attempting admin sign in with:', email);
+      const { data: authData, error: signInError } = await adminSupabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (signInError) {
-        console.error('Sign in error:', signInError);
+        console.error('Admin sign in error:', signInError);
         throw signInError;
       }
       
-      console.log('Auth response:', {
+      console.log('Admin auth response:', {
         user: authData.user ? {
           id: authData.user.id,
           email: authData.user.email,
@@ -42,7 +42,7 @@ export const AdminLogin: React.FC = () => {
       });
 
       if (!authData.user) {
-        console.error('No user data returned');
+        console.error('No admin user data returned');
         throw new Error('No user data returned');
       }
 
@@ -56,10 +56,10 @@ export const AdminLogin: React.FC = () => {
         throw new Error('Unauthorized access');
       }
 
-      console.log('Login successful, navigating to admin dashboard...');
+      console.log('Admin login successful, navigating to admin dashboard...');
       navigate('/admin/transactions');
     } catch (err) {
-      console.error('Login error:', err);
+      console.error('Admin login error:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);

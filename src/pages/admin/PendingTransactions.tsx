@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { adminSupabase } from '../../lib/supabase';
 import { format } from 'date-fns';
 
 interface Transaction {
@@ -23,8 +23,8 @@ export const PendingTransactions: React.FC = () => {
 
   const fetchTransactions = async () => {
     try {
-      console.log('Fetching transactions...');
-      const { data, error } = await supabase
+      console.log('Fetching pending transactions...');
+      const { data, error } = await adminSupabase
         .from('admin_transactions')
         .select('*')
         .order('created_at', { ascending: false });
@@ -53,7 +53,7 @@ export const PendingTransactions: React.FC = () => {
     try {
       console.log('Processing transaction:', { transactionId, action });
       
-      const { error } = await supabase.rpc('process_transaction', {
+      const { error } = await adminSupabase.rpc('process_transaction', {
         p_transaction_id: transactionId,
         p_action: action
       });

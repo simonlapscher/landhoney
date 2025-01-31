@@ -54,9 +54,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       setSession(initialSession);
       
-      // Only set original session if we don't have one stored
+      // Only set original session if we don't have one stored and we're not in admin portal
       const storedSession = localStorage.getItem('originalSession');
-      if (!storedSession && initialSession) {
+      const isAdminEmail = initialSession?.user?.email?.endsWith('@landhoney.io');
+      const isAdminPath = window.location.pathname.startsWith('/admin');
+      
+      if (!storedSession && initialSession && !isAdminEmail && !isAdminPath) {
         console.log('Setting original session:', {
           email: initialSession.user?.email,
           id: initialSession.user?.id
@@ -78,19 +81,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       setSession(newSession);
       
-      // Set original session if we don't have one and this is a new sign in
-      const storedSession = localStorage.getItem('originalSession');
-      if (!storedSession && newSession && _event === 'SIGNED_IN') {
-        console.log('Setting original session from auth change:', {
-          email: newSession.user?.email,
-          id: newSession.user?.id
-        });
-        setOriginalSessionWithStorage(newSession);
-      }
+      // Handle different auth events
+      switch (_event) {
+        case 'SIGNED_IN': {
+          const isAdminEmail = newSession?.user?.email?.endsWith('@landhoney.io');
+          const isAdminPath = window.location.pathname.startsWith('/admin');
+          const storedSession = localStorage.getItem('originalSession');
 
-      // Clear original session on sign out
-      if (_event === 'SIGNED_OUT') {
-        setOriginalSessionWithStorage(null);
+          // If it's a new user session (not admin) and we don't have a stored session
+          if (!isAdminEmail && !isAdminPath && !storedSession) {
+            console.log('Setting original session from new sign in:', {
+              email: newSession?.user?.email,
+              id: newSession?.user?.id
+            });
+            setOriginalSessionWithStorage(newSession);
+          }
+          break;
+        }
+        case 'SIGNED_OUT': {
+          // Only clear original session if we're not in admin portal
+          if (!window.location.pathname.startsWith('/admin')) {
+            setOriginalSessionWithStorage(null);
+          }
+          break;
+        }
+        case 'USER_UPDATED': {
+          // Update the current session but preserve original session
+          setSession(newSession);
+          break;
+        }
       }
     });
 
@@ -101,7 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const value = {
     session,
-    user: originalSession?.user ?? session?.user ?? null,
+    user: session?.user ?? null,
     originalSession,
     originalUser: originalSession?.user ?? null,
     isLoading,

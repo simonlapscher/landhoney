@@ -16,28 +16,41 @@ export const EmailVerification: React.FC = () => {
           throw new Error('No user found');
         }
 
-        // Check if user needs profile creation
-        if (user.user_metadata?.needs_profile_creation) {
-          // Create profile
-          const { error: profileError } = await supabase
+        // Check if profile exists
+        const { data: existingProfile, error: fetchError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        if (fetchError && fetchError.code !== 'PGRST116') { // Not found error
+          throw fetchError;
+        }
+
+        if (!existingProfile) {
+          // Create new profile
+          const { error: insertError } = await supabase
             .from('profiles')
             .insert({
-              user_id: user.id
+              user_id: user.id,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
             });
 
-          if (profileError) {
-            console.error('Profile creation error:', profileError);
-            throw profileError;
+          if (insertError) {
+            console.error('Profile creation error:', insertError);
+            throw new Error('Failed to create profile');
           }
+        }
 
-          // Update user metadata to remove the flag
-          const { error: updateError } = await supabase.auth.updateUser({
-            data: { needs_profile_creation: false }
-          });
+        // Update user metadata to remove the flag
+        const { error: updateError } = await supabase.auth.updateUser({
+          data: { needs_profile_creation: false }
+        });
 
-          if (updateError) {
-            console.error('Error updating user metadata:', updateError);
-          }
+        if (updateError) {
+          console.error('Error updating user metadata:', updateError);
+          // Don't throw here, as profile is already created
         }
 
         // Redirect to country selection

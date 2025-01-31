@@ -26,6 +26,8 @@ export const ProfilePage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string>("https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/honeycito.png");
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   useEffect(() => {
     console.log('Current user:', user);
@@ -74,16 +76,51 @@ export const ProfilePage: React.FC = () => {
 
   const handleSaveDisplayName = async () => {
     try {
-      if (!profile?.user_id) return;
+      if (!profile?.user_id || !user?.email) {
+        console.error('No profile user_id or email found:', { profile, user });
+        return;
+      }
 
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ display_name: displayName })
-        .eq('user_id', profile.user_id);
+      console.log('Attempting to save display name:', {
+        displayName,
+        userId: profile.user_id
+      });
 
-      if (updateError) throw updateError;
+      // Update profile using RPC
+      const { data: updateData, error: updateError } = await supabase.rpc(
+        'update_profile_display_name',
+        { 
+          p_user_id: profile.user_id,
+          p_display_name: displayName
+        }
+      );
 
-      await fetchProfile();
+      console.log('Update response:', { updateData, updateError });
+
+      if (updateError) {
+        console.error('Error from Supabase:', updateError);
+        throw updateError;
+      }
+
+      // Then fetch the updated profile using RPC
+      const { data: updatedProfile, error: fetchError } = await supabase.rpc(
+        'get_profile_by_email',
+        { p_email: user.email }
+      );
+
+      if (fetchError) {
+        console.error('Error fetching updated profile:', fetchError);
+        throw fetchError;
+      }
+
+      console.log('Updated profile:', updatedProfile);
+      
+      if (!updatedProfile) {
+        console.error('No profile data returned');
+        throw new Error('Failed to update display name');
+      }
+
+      setProfile(updatedProfile);
       setIsEditingName(false);
     } catch (error) {
       console.error('Error updating display name:', error);
@@ -93,15 +130,61 @@ export const ProfilePage: React.FC = () => {
 
   const handleSaveEmail = async () => {
     try {
-      if (!profile?.user_id) return;
+      if (!profile?.user_id || !user?.email) {
+        console.error('No profile user_id or email found:', { profile, user });
+        return;
+      }
 
-      const { error: updateError } = await supabase.auth.updateUser({
+      console.log('Attempting to save email:', {
+        email,
+        userId: profile.user_id
+      });
+
+      // First update auth email
+      const { error: authError } = await supabase.auth.updateUser({
         email: email
       });
 
-      if (updateError) throw updateError;
+      if (authError) {
+        console.error('Error updating auth email:', authError);
+        throw authError;
+      }
 
-      await fetchProfile();
+      // Then update profile email using RPC
+      const { data: updateData, error: updateError } = await supabase.rpc(
+        'update_profile_email',
+        { 
+          p_user_id: profile.user_id,
+          p_email: email
+        }
+      );
+
+      console.log('Update response:', { updateData, updateError });
+
+      if (updateError) {
+        console.error('Error from Supabase:', updateError);
+        throw updateError;
+      }
+
+      // Then fetch the updated profile using RPC
+      const { data: updatedProfile, error: fetchError } = await supabase.rpc(
+        'get_profile_by_email',
+        { p_email: email }  // Use new email here
+      );
+
+      if (fetchError) {
+        console.error('Error fetching updated profile:', fetchError);
+        throw fetchError;
+      }
+
+      console.log('Updated profile:', updatedProfile);
+      
+      if (!updatedProfile) {
+        console.error('No profile data returned');
+        throw new Error('Failed to update email');
+      }
+
+      setProfile(updatedProfile);
       setIsEditingEmail(false);
     } catch (error) {
       console.error('Error updating email:', error);
@@ -111,20 +194,120 @@ export const ProfilePage: React.FC = () => {
 
   const handleSavePhone = async () => {
     try {
-      if (!profile?.user_id) return;
+      if (!profile?.user_id || !user?.email) {
+        console.error('No profile user_id or email found:', { profile, user });
+        return;
+      }
 
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ phone: phone })
-        .eq('user_id', profile.user_id);
+      console.log('Attempting to save phone:', {
+        phone,
+        userId: profile.user_id
+      });
 
-      if (updateError) throw updateError;
+      // Update phone using RPC
+      const { data: updateData, error: updateError } = await supabase.rpc(
+        'update_profile_phone',
+        { 
+          p_user_id: profile.user_id,
+          p_phone: phone
+        }
+      );
 
-      await fetchProfile();
+      console.log('Update response:', { updateData, updateError });
+
+      if (updateError) {
+        console.error('Error from Supabase:', updateError);
+        throw updateError;
+      }
+
+      // Then fetch the updated profile using RPC
+      const { data: updatedProfile, error: fetchError } = await supabase.rpc(
+        'get_profile_by_email',
+        { p_email: user.email }
+      );
+
+      if (fetchError) {
+        console.error('Error fetching updated profile:', fetchError);
+        throw fetchError;
+      }
+
+      console.log('Updated profile:', updatedProfile);
+      
+      if (!updatedProfile) {
+        console.error('No profile data returned');
+        throw new Error('Failed to update phone number');
+      }
+
+      setProfile(updatedProfile);
       setIsEditingPhone(false);
     } catch (error) {
       console.error('Error updating phone:', error);
       setError('Failed to update phone number. Please try again.');
+    }
+  };
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      if (!event.target.files || event.target.files.length === 0) {
+        return;
+      }
+
+      setIsUploadingAvatar(true);
+      const file = event.target.files[0];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).slice(2)}.${fileExt}`;
+
+      console.log('Uploading file:', {
+        file,
+        fileName,
+        size: file.size,
+        type: file.type
+      });
+
+      // Upload to avatars bucket
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, { 
+          upsert: true,
+          contentType: file.type
+        });
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
+
+      console.log('Upload successful:', uploadData);
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      console.log('File uploaded successfully:', publicUrl);
+
+      // Update profile with new avatar URL
+      const { data: updateData, error: updateError } = await supabase.rpc(
+        'update_profile_avatar',
+        { 
+          p_user_id: profile?.user_id,
+          p_avatar_url: publicUrl
+        }
+      );
+
+      if (updateError) {
+        console.error('Profile update error:', updateError);
+        throw updateError;
+      }
+
+      console.log('Profile updated with new avatar:', updateData);
+      setAvatarUrl(publicUrl);
+      await fetchProfile();
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      setError('Failed to upload profile picture. Please try again.');
+    } finally {
+      setIsUploadingAvatar(false);
     }
   };
 
@@ -139,12 +322,29 @@ export const ProfilePage: React.FC = () => {
       {/* Profile Picture Section */}
       <div className="flex items-center justify-between mb-8 pb-8 border-b border-light/10">
         <div className="flex items-center space-x-4">
-          <div className="relative">
+          <div className="relative group">
             <img
-              src="https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/honeycito.png"
+              src={avatarUrl}
               alt="Profile"
               className="w-24 h-24 rounded-full object-cover border border-light/20"
             />
+            <label 
+              className="absolute inset-0 flex items-center justify-center bg-dark/80 rounded-full 
+                        opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+            >
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarUpload}
+                disabled={isUploadingAvatar}
+              />
+              {isUploadingAvatar ? (
+                <div className="animate-spin rounded-full h-6 w-6 border-2 border-light/60 border-t-transparent"/>
+              ) : (
+                <CameraIcon className="h-6 w-6 text-light/60" />
+              )}
+            </label>
           </div>
           <div>
             <div className="flex items-center">
@@ -171,9 +371,8 @@ export const ProfilePage: React.FC = () => {
                   <div className="mt-4 mb-4">
                     <Button
                       variant="primary"
-                      size="sm"
                       onClick={handleSaveDisplayName}
-                      className="rounded-full px-8 py-2"
+                      className="rounded-full px-8 py-1.5"
                     >
                       Save
                     </Button>
@@ -217,7 +416,7 @@ export const ProfilePage: React.FC = () => {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="Enter email"
-                      className="!bg-dark-2 w-64"
+                      className="!bg-dark-2 w-[300px]"
                     />
                     <Button
                       variant="secondary"
@@ -233,9 +432,8 @@ export const ProfilePage: React.FC = () => {
                   <div className="mt-4 mb-4">
                     <Button
                       variant="primary"
-                      size="sm"
                       onClick={handleSaveEmail}
-                      className="rounded-full px-8 py-2"
+                      className="rounded-full px-8 py-1.5"
                     >
                       Save
                     </Button>
@@ -271,7 +469,7 @@ export const ProfilePage: React.FC = () => {
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="Enter phone number"
-                      className="!bg-dark-2 w-64"
+                      className="!bg-dark-2 w-[300px]"
                     />
                     <Button
                       variant="secondary"
@@ -287,9 +485,8 @@ export const ProfilePage: React.FC = () => {
                   <div className="mt-4 mb-4">
                     <Button
                       variant="primary"
-                      size="sm"
                       onClick={handleSavePhone}
-                      className="rounded-full px-8 py-2"
+                      className="rounded-full px-8 py-1.5"
                     >
                       Save
                     </Button>

@@ -41,7 +41,6 @@ export const transactionService = {
   },
 
   async createTransaction(
-    userId: string,
     assetId: string,
     amountUsd: number,
     amountTokens: number,
@@ -51,7 +50,6 @@ export const transactionService = {
   ): Promise<Transaction> {
     try {
       console.log('Starting transaction creation with:', {
-        userId,
         assetId,
         amountTokens,
         pricePerToken,
@@ -78,6 +76,30 @@ export const transactionService = {
         );
       }
 
+      // Get profile using email to ensure correct user context
+      const { data: profile, error: profileError } = await supabase.rpc(
+        'get_profile_by_email',
+        { p_email: session.user.email }
+      );
+
+      if (profileError) {
+        console.error('Profile fetch error:', profileError);
+        throw new TransactionError(
+          'Profile error',
+          'PROFILE_ERROR',
+          'Failed to verify user profile'
+        );
+      }
+
+      if (!profile) {
+        console.error('No profile found for email:', session.user.email);
+        throw new TransactionError(
+          'Profile error',
+          'PROFILE_ERROR',
+          'User profile not found'
+        );
+      }
+
       // Verify asset exists
       const assetExists = await this.verifyAsset(assetId);
       if (!assetExists) {
@@ -89,29 +111,6 @@ export const transactionService = {
         );
       }
 
-      // Verify user exists (this should be handled by RLS, but double-check)
-      const { data: userExists, error: userError } = await supabase.rpc('get_user_profile', {
-        p_user_id: userId
-      });
-
-      if (userError) {
-        console.error('User verification error:', userError);
-        throw new TransactionError(
-          'User verification failed',
-          'USER_ERROR',
-          userError.message
-        );
-      }
-
-      if (!userExists) {
-        console.error('No profile found for user:', userId);
-        throw new TransactionError(
-          'User not found',
-          'USER_NOT_FOUND',
-          'Please complete your profile before investing'
-        );
-      }
-
       const metadata: TransactionMetadata = {
         payment_method: paymentMethod,
         fee_usd: feeUsd,
@@ -119,7 +118,7 @@ export const transactionService = {
       };
       
       console.log('Attempting to create transaction with data:', {
-        user_id: userId,
+        user_id: profile.user_id,
         asset_id: assetId,
         type: 'buy',
         amount: amountTokens,
@@ -130,7 +129,7 @@ export const transactionService = {
       const { data, error } = await supabase
         .from('transactions')
         .insert({
-          user_id: userId,
+          user_id: profile.user_id,
           asset_id: assetId,
           type: 'buy',
           amount: amountTokens,
@@ -144,52 +143,23 @@ export const transactionService = {
         .single();
 
       if (error) {
-        console.error('Transaction creation error details:', {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint
-        });
-        
-        // Handle specific database errors
-        switch (error.code) {
-          case '23503': // Foreign key violation
-            throw new TransactionError(
-              'Invalid reference',
-              'INVALID_REFERENCE',
-              'The asset or user reference is invalid'
-            );
-          case '23514': // Check violation
-            throw new TransactionError(
-              'Invalid transaction data',
-              'INVALID_DATA',
-              'The transaction amount or price must be greater than 0'
-            );
-          case '42501': // Permission denied
-            throw new TransactionError(
-              'Permission denied',
-              'PERMISSION_ERROR',
-              'You do not have permission to create transactions'
-            );
-          default:
-            throw new TransactionError(
-              'Failed to create transaction',
-              'CREATE_ERROR',
-              `${error.message} (Code: ${error.code})`
-            );
-        }
+        console.error('Transaction creation error:', error);
+        throw new TransactionError(
+          'Failed to create transaction',
+          'TRANSACTION_ERROR',
+          error.message
+        );
       }
 
-      console.log('Transaction created successfully:', data);
       return data;
     } catch (error) {
-      console.error('Full error details:', error);
-      
-      if (error instanceof TransactionError) throw error;
-      
+      console.error('Error in createTransaction:', error);
+      if (error instanceof TransactionError) {
+        throw error;
+      }
       throw new TransactionError(
         'Failed to create transaction',
-        'UNEXPECTED_ERROR',
+        'UNKNOWN_ERROR',
         error instanceof Error ? error.message : 'Unknown error'
       );
     }
@@ -197,22 +167,53 @@ export const transactionService = {
 
   async getUserTransactions(userId: string): Promise<Transaction[]> {
     try {
+      console.log('Fetching user transactions for ID:', userId);
       const { data, error } = await supabase
         .from('transactions')
         .select(`
           *,
-          asset:assets(*)
+          asset:assets (
+            id,
+            name,
+            symbol,
+            type,
+            price_per_token,
+            main_image,
+            debt_assets (
+              id,
+              apr,
+              term_months,
+              loan_amount,
+              appraised_value
+            )
+          )
         `)
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (error) {
+        console.error('Error fetching user transactions:', error);
         throw new TransactionError(
           'Failed to fetch transactions',
           'FETCH_ERROR',
           error.message
         );
       }
+
+      console.log('Raw transaction response:', {
+        count: data?.length || 0,
+        transactions: data?.map(t => ({
+          id: t.id,
+          status: t.status,
+          type: t.type,
+          amount: t.amount,
+          created_at: t.created_at,
+          asset: {
+            symbol: t.asset?.symbol,
+            name: t.asset?.name
+          }
+        }))
+      });
 
       return data;
     } catch (error) {
@@ -258,6 +259,8 @@ export const transactionService = {
         );
       }
 
+      console.log('Raw response from getUserBalances:', JSON.stringify(data, null, 2));
+
       if (!data || data.length === 0) {
         console.log('No balances found in database for user:', userId);
       } else {
@@ -267,9 +270,11 @@ export const transactionService = {
 
       return data || [];
     } catch (error) {
-      console.error('Error in getUserBalances:', error);
+      if (error instanceof TransactionError) throw error;
+      
+      console.error('Error in getUserBalance:', error);
       throw new TransactionError(
-        'Failed to fetch balances',
+        'Failed to fetch balance',
         'FETCH_ERROR',
         error instanceof Error ? error.message : 'Unknown error'
       );

@@ -84,7 +84,6 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose }) =>
         });
         
         const newTransaction = await transactionService.createTransaction(
-          originalUser.id,
           asset.id,
           numericAmount,
           tokenAmount,

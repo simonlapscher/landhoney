@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { adminSupabase } from '../../lib/supabase';
 import { checkAdminStatus } from '../../lib/adminAuth';
 
 export const AdminLayout: React.FC = () => {
@@ -10,7 +10,7 @@ export const AdminLayout: React.FC = () => {
   useEffect(() => {
     const verifyAdmin = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { user } } = await adminSupabase.auth.getUser();
         
         if (!user) {
           navigate('/admin/login');
@@ -55,7 +55,7 @@ export const AdminLayout: React.FC = () => {
             <div className="flex items-center">
               <button
                 onClick={() => {
-                  supabase.auth.signOut();
+                  adminSupabase.auth.signOut();
                   navigate('/admin/login');
                 }}
                 className="text-light/60 hover:text-light"

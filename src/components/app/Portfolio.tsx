@@ -6,22 +6,12 @@ import { useNavigate } from 'react-router-dom';
 import { OrderDetailPopup } from './OrderDetailPopup';
 import { transactionService } from '../../lib/services/transactionService';
 import { useAuth } from '../../lib/context/AuthContext';
-import { Asset, DebtAsset } from '../../lib/types/asset';
+import { Asset } from '../../lib/types/asset';
 import { Transaction as BaseTransaction } from '../../lib/types/transaction';
-import { PortfolioAsset, CommodityAsset } from '../../types/portfolio';
+import { PortfolioAsset } from '../../types/portfolio';
 
 interface TransactionWithAsset extends BaseTransaction {
-  asset: {
-    name: string;
-    symbol: string;
-    main_image: string;
-    price_per_token: number;
-    type: 'debt' | 'commodity';
-    apr?: number;
-    id: string;
-    created_at: string;
-    updated_at: string;
-  };
+  asset: PortfolioAsset;
 }
 
 interface Transaction extends Omit<BaseTransaction, 'type'> {
@@ -42,13 +32,13 @@ interface PortfolioBalance {
   asset: PortfolioAsset;
 }
 
-const isDebtAsset = (asset: Asset): asset is DebtAsset => {
+const isDebtAsset = (asset: PortfolioAsset): asset is PortfolioAsset & { type: 'debt' } => {
   return asset.type === 'debt';
 };
 
 export const Portfolio: React.FC = () => {
   const navigate = useNavigate();
-  const { originalUser, user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [balances, setBalances] = useState<PortfolioBalance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,10 +47,14 @@ export const Portfolio: React.FC = () => {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [assetType, setAssetType] = useState<'all' | 'debt' | 'commodities'>('all');
 
+  // Check if we're in the admin portal context
+  const isAdminPortal = window.location.pathname.startsWith('/admin') || (
+    user?.email?.endsWith('@landhoney.io') && !user.email?.startsWith('simon+')
+  );
+
   console.log('Portfolio component state:', {
-    hasOriginalUser: !!originalUser,
-    originalUserEmail: originalUser?.email,
-    currentUserEmail: user?.email,
+    isAdminPortal,
+    userEmail: user?.email,
     authLoading,
     loading,
     isRefreshing,
@@ -70,9 +64,16 @@ export const Portfolio: React.FC = () => {
   });
 
   const fetchPortfolioData = async (isBackgroundRefresh = false) => {
-    if (!originalUser) {
-      console.log('No original user found in Portfolio');
+    if (!user) {
+      console.log('No user found in Portfolio');
       setError('No authenticated user');
+      setLoading(false);
+      return;
+    }
+
+    if (isAdminPortal) {
+      console.log('Admin portal or admin user detected, blocking portfolio access');
+      setError('Portfolio view is not available for admin users');
       setLoading(false);
       return;
     }
@@ -86,14 +87,30 @@ export const Portfolio: React.FC = () => {
       setError(null);
 
       console.log('Fetching portfolio data for user:', {
-        email: originalUser.email,
-        id: originalUser.id,
+        email: user.email,
+        id: user.id,
         isBackgroundRefresh
       });
 
+      // Get profile using email
+      const { data: profile, error: profileError } = await supabase.rpc(
+        'get_profile_by_email',
+        { p_email: user.email }
+      );
+
+      if (profileError) {
+        console.error('Profile fetch error:', profileError);
+        throw new Error('Failed to verify user profile');
+      }
+
+      if (!profile) {
+        console.error('No profile found for email:', user.email);
+        throw new Error('User profile not found');
+      }
+
       const [transactionsData, balancesData] = await Promise.all([
-        transactionService.getUserTransactions(originalUser.id) as Promise<TransactionWithAsset[]>,
-        transactionService.getUserBalances(originalUser.id)
+        transactionService.getUserTransactions(profile.user_id) as Promise<TransactionWithAsset[]>,
+        transactionService.getUserBalances(profile.user_id)
       ]);
 
       console.log('Raw balances data:', balancesData);
@@ -115,12 +132,12 @@ export const Portfolio: React.FC = () => {
           .map(b => {
             console.log('Raw asset details:', {
               symbol: b.asset.symbol,
-              type: b.asset.symbol.startsWith('DEBT') ? 'debt' : 'commodity',
+              type: b.asset.type,
               debtDetails: b.asset.debt_assets?.[0],
               rawAsset: b.asset
             });
             
-            const isDebtAsset = b.asset.symbol.startsWith('DEBT');
+            const isDebtAsset = b.asset.type === 'debt';
             const debtDetails = isDebtAsset ? b.asset.debt_assets?.[0] : null;
             
             const asset: PortfolioAsset = {
@@ -129,6 +146,7 @@ export const Portfolio: React.FC = () => {
               price_per_token: Number(b.asset.price_per_token),
               apr: debtDetails?.apr
             };
+            
             return {
               id: b.id,
               user_id: b.user_id,
@@ -163,24 +181,24 @@ export const Portfolio: React.FC = () => {
 
   useEffect(() => {
     console.log('Portfolio useEffect triggered:', {
-      hasOriginalUser: !!originalUser,
-      originalUserEmail: originalUser?.email
+      userEmail: user?.email,
+      isAdminPortal
     });
     
-    if (originalUser) {
+    if (user && !isAdminPortal) {
       fetchPortfolioData(false);
     }
-  }, [originalUser]);
+  }, [user, isAdminPortal]);
 
   useEffect(() => {
-    if (!originalUser) return;
+    if (!user || isAdminPortal) return;
 
     const interval = setInterval(() => {
       fetchPortfolioData(true);
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [originalUser]);
+  }, [user, isAdminPortal]);
 
   const totalPortfolioValue = balances.reduce((sum, balance) => sum + Number(balance.total_value), 0);
   

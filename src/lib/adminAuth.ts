@@ -1,11 +1,11 @@
-import { supabase } from './supabase';
+import { adminSupabase } from './supabase';
 
 export const checkAdminStatus = async () => {
   console.log('Starting admin status check...');
   
   try {
     console.log('Fetching user data...');
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const { data: { user }, error } = await adminSupabase.auth.getUser();
     
     if (error) {
       console.error('Error fetching user:', error);

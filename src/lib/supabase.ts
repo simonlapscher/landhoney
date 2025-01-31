@@ -10,4 +10,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
+// Create client for user portal with default storage key
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Create client for admin portal with different storage key
+export const adminSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storageKey: 'admin-auth',
+    autoRefreshToken: true,
+    persistSession: true,
+  }
+});
