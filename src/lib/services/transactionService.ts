@@ -244,7 +244,9 @@ export const transactionService = {
               apr,
               term_months,
               loan_amount,
-              appraised_value
+              appraised_value,
+              city,
+              state
             )
           )
         `)
@@ -329,4 +331,210 @@ export const transactionService = {
       );
     }
   },
+
+  async stakeHoney(userId: string, amount: number): Promise<Transaction> {
+    try {
+      console.log('Starting Honey staking transaction:', { userId, amount });
+
+      // Get the Honey asset
+      const { data: honeyAsset, error: honeyError } = await supabase
+        .from('assets')
+        .select('*')
+        .eq('symbol', 'HONEY')
+        .single();
+
+      if (honeyError || !honeyAsset) {
+        console.error('Error fetching Honey asset:', honeyError);
+        throw new TransactionError(
+          'Failed to fetch Honey asset',
+          'ASSET_ERROR',
+          honeyError?.message
+        );
+      }
+
+      // Create staking transaction
+      const { data: transaction, error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: userId,
+          asset_id: honeyAsset.id,
+          type: 'stake',
+          amount: amount,
+          price_per_token: honeyAsset.price_per_token,
+          status: 'pending',
+          metadata: {
+            reference: `STAKE_${Date.now()}`,
+            fee_usd: 0,
+            payment_method: 'USD'
+          },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (transactionError) {
+        console.error('Error creating stake transaction:', transactionError);
+        throw new TransactionError(
+          'Failed to create stake transaction',
+          'TRANSACTION_ERROR',
+          transactionError.message
+        );
+      }
+
+      return transaction;
+    } catch (error) {
+      console.error('Error in stakeHoney:', error);
+      if (error instanceof TransactionError) {
+        throw error;
+      }
+      throw new TransactionError(
+        'Failed to stake Honey',
+        'UNKNOWN_ERROR',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+    }
+  },
+
+  async unstakeHoney(userId: string, amount: number): Promise<Transaction> {
+    try {
+      console.log('Starting Honey unstaking transaction:', { userId, amount });
+
+      // Get the Honey asset
+      const { data: honeyAsset, error: honeyError } = await supabase
+        .from('assets')
+        .select('*')
+        .eq('symbol', 'HONEY')
+        .single();
+
+      if (honeyError || !honeyAsset) {
+        console.error('Error fetching Honey asset:', honeyError);
+        throw new TransactionError(
+          'Failed to fetch Honey asset',
+          'ASSET_ERROR',
+          honeyError?.message
+        );
+      }
+
+      // Create unstaking transaction
+      const { data: transaction, error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: userId,
+          asset_id: honeyAsset.id,
+          type: 'unstake',
+          amount: amount,
+          price_per_token: honeyAsset.price_per_token,
+          status: 'pending',
+          metadata: {
+            reference: `UNSTAKE_${Date.now()}`,
+            fee_usd: 0,
+            payment_method: 'USD'
+          },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (transactionError) {
+        console.error('Error creating unstake transaction:', transactionError);
+        throw new TransactionError(
+          'Failed to create unstake transaction',
+          'TRANSACTION_ERROR',
+          transactionError.message
+        );
+      }
+
+      return transaction;
+    } catch (error) {
+      console.error('Error in unstakeHoney:', error);
+      if (error instanceof TransactionError) {
+        throw error;
+      }
+      throw new TransactionError(
+        'Failed to unstake Honey',
+        'UNKNOWN_ERROR',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+    }
+  },
+
+  async getHoneyStakingInfo(userId: string): Promise<{ 
+    honeyBalance: number, 
+    honeyXBalance: number, 
+    stakingPercentage: number 
+  }> {
+    try {
+      console.log('Fetching Honey staking info for user:', userId);
+
+      interface AssetBalance {
+        balance: number;
+        asset: {
+          symbol: string;
+        };
+      }
+
+      const { data: balances, error: balancesError } = await supabase
+        .from('user_balances')
+        .select(`
+          balance,
+          asset:assets (
+            symbol
+          )
+        `)
+        .eq('user_id', userId)
+        .in('asset.symbol', ['HONEY', 'HONEYX']) as { 
+          data: AssetBalance[] | null, 
+          error: any 
+        };
+
+      if (balancesError) {
+        console.error('Error fetching Honey balances:', balancesError);
+        throw new TransactionError(
+          'Failed to fetch Honey balances',
+          'BALANCE_ERROR',
+          balancesError.message
+        );
+      }
+
+      // If no balances found, return zero values
+      if (!balances || balances.length === 0) {
+        console.log('No Honey balances found for user:', userId);
+        return {
+          honeyBalance: 0,
+          honeyXBalance: 0,
+          stakingPercentage: 0
+        };
+      }
+
+      const honeyBalance = balances.find(b => b?.asset?.symbol === 'HONEY')?.balance || 0;
+      const honeyXBalance = balances.find(b => b?.asset?.symbol === 'HONEYX')?.balance || 0;
+      const stakingPercentage = honeyXBalance > 0 
+        ? (honeyXBalance / (honeyBalance + honeyXBalance)) * 100 
+        : 0;
+
+      console.log('Found Honey balances:', {
+        honeyBalance,
+        honeyXBalance,
+        stakingPercentage
+      });
+
+      return {
+        honeyBalance: Number(honeyBalance),
+        honeyXBalance: Number(honeyXBalance),
+        stakingPercentage
+      };
+    } catch (error) {
+      console.error('Error in getHoneyStakingInfo:', error);
+      if (error instanceof TransactionError) {
+        throw error;
+      }
+      throw new TransactionError(
+        'Failed to fetch Honey staking info',
+        'UNKNOWN_ERROR',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+    }
+  }
 }; 

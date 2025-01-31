@@ -2,7 +2,11 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Asset, DebtAsset, CommodityAsset } from '../../lib/types/asset';
 
-export const AssetCard: React.FC<{ asset: Asset }> = ({ asset }) => {
+interface AssetCardProps {
+  asset: Asset;
+}
+
+export const AssetCard: React.FC<AssetCardProps> = ({ asset }) => {
   const navigate = useNavigate();
 
   const handleCardClick = () => {
@@ -61,39 +65,56 @@ export const AssetCard: React.FC<{ asset: Asset }> = ({ asset }) => {
                 <p className="text-sm text-light/60">Term</p>
               </div>
             </div>
-            <div className="space-y-2 flex-1">
-              <div className="w-full bg-dark rounded-full h-2">
-                <div
-                  className="bg-[#42DB98] h-2 rounded-full transition-all duration-500"
-                  style={{
-                    width: `${Math.max(0, Math.min(100, (asset.funded_amount / asset.funding_goal) * 100))}%`,
-                  }}
-                />
+            <div className="flex-1 flex flex-col">
+              <div className="space-y-2 mb-6">
+                <div className="w-full bg-dark rounded-full h-2">
+                  <div
+                    className="bg-[#42DB98] h-2 rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.max(0, Math.min(100, (asset.funded_amount / asset.loan_amount) * 100))}%`,
+                    }}
+                  />
+                </div>
+                <div className="flex justify-end text-sm">
+                  <span className="text-light/60">
+                    ${Math.round(asset.remaining_amount).toLocaleString()} remaining
+                  </span>
+                </div>
               </div>
-              <div className="flex justify-end text-sm">
-                <span className="text-light/60">
-                  ${Math.round(asset.remaining_amount).toLocaleString()} remaining
-                </span>
-              </div>
+              <button 
+                onClick={handleInvestClick}
+                className="w-full bg-[#00D54B] text-dark font-medium py-3 px-6 rounded-lg hover:bg-[#00D54B]/90 transition-colors mt-auto"
+              >
+                Invest
+              </button>
             </div>
           </>
         ) : isCommodityAsset(asset) ? (
-          <>
-            <h3 className="text-xl text-light mb-2">{asset.name}</h3>
-            <p className="text-light/60 mb-4 flex-1">{asset.description}</p>
+          <div className="flex flex-col justify-between h-full">
+            <div className="mb-8">
+              <h3 className="text-xl text-light mb-2">{asset.name}</h3>
+              <p className="text-light/60">{asset.description}</p>
+            </div>
             {getLatestPrice(asset) && (
-              <p className="text-2xl text-light font-medium mb-4">
-                ${getLatestPrice(asset)?.toLocaleString() || '0'}
-              </p>
+              <div className="mb-8">
+                <div className="flex items-baseline gap-2">
+                  <p className="text-2xl text-light font-medium">
+                    ${getLatestPrice(asset)?.toLocaleString() || '0'}
+                  </p>
+                  {asset.symbol === 'HONEY' && (
+                    <p className="text-sm text-light/60">per Honey = 1oz gold</p>
+                  )}
+                </div>
+              </div>
             )}
-          </>
+            <button 
+              onClick={handleInvestClick}
+              className="w-full bg-[#00D54B] text-dark font-medium py-3 px-6 rounded-lg hover:bg-[#00D54B]/90 transition-colors"
+            >
+              Invest
+            </button>
+          </div>
         ) : null}
-        <button 
-          onClick={handleInvestClick}
-          className="w-full bg-[#42DB98] text-dark font-medium text-lg py-3 px-6 rounded-lg mt-6 hover:bg-[#42DB98]/80 transition-colors"
-        >
-          Invest
-        </button>
       </div>
     </div>
   );

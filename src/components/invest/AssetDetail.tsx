@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Tab } from '@headlessui/react';
 import { ImageGallery } from '../common/ImageGallery';
 import { InvestmentBox } from './InvestmentBox';
+import { HoneyInvestmentBox } from './HoneyInvestmentBox';
 import { Asset, DebtAsset } from '../../lib/types/asset';
 import { assetService } from '../../lib/services/assetService';
 import { transactionService } from '../../lib/services/transactionService';
@@ -26,6 +27,7 @@ export const AssetDetail: React.FC = () => {
       try {
         setLoading(true);
         const data = await assetService.getAssetById(id);
+        console.log('Fetched asset data:', data);
         setAsset(data);
       } catch (err) {
         console.error('Error fetching asset:', err);
@@ -67,6 +69,12 @@ export const AssetDetail: React.FC = () => {
   const images = asset.type === 'debt' && (asset as DebtAsset).images 
     ? (asset as DebtAsset).images || [asset.main_image]
     : [asset.main_image];
+
+  console.log('Current asset state:', {
+    type: asset?.type,
+    symbol: asset?.symbol,
+    shouldShowHoneyBox: asset?.type === 'commodity' && asset?.symbol === 'HONEY'
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -184,13 +192,24 @@ export const AssetDetail: React.FC = () => {
 
         {/* Investment Box */}
         <div className="w-96">
-          {asset.type === 'debt' && (
+          {asset.type === 'debt' ? (
             <InvestmentBox
               asset={asset as DebtAsset}
               userBalance={userBalance}
               onInvest={() => {}}
               onSell={() => {}}
             />
+          ) : asset.type === 'commodity' && asset.symbol === 'HONEY' ? (
+            <HoneyInvestmentBox
+              asset={asset}
+              userBalance={userBalance}
+              onInvest={() => {}}
+              onSell={() => {}}
+            />
+          ) : (
+            <div className="text-light/60">
+              Debug: Asset type={asset.type}, symbol={asset.symbol}
+            </div>
           )}
         </div>
       </div>

@@ -6,17 +6,47 @@ import { useNavigate } from 'react-router-dom';
 import { OrderDetailPopup } from './OrderDetailPopup';
 import { transactionService } from '../../lib/services/transactionService';
 import { useAuth } from '../../lib/context/AuthContext';
-import { Asset } from '../../lib/types/asset';
+import { BaseAsset, DebtAsset, Asset } from '../../lib/types/asset';
 import { Transaction as BaseTransaction } from '../../lib/types/transaction';
 import { PortfolioAsset } from '../../types/portfolio';
+import { HoneyStakingModal } from './HoneyStakingModal';
+
+interface RawAssetResponse extends BaseAsset {
+  debt_assets?: {
+    id: string;
+    apr: number;
+    term_months: number;
+    loan_amount: number;
+    appraised_value: number;
+    city: string;
+    state: string;
+  }[];
+}
+
+interface RawBalanceResponse {
+  id: string;
+  user_id: string;
+  asset_id: string;
+  balance: number;
+  total_interest_earned: number;
+  created_at: string;
+  updated_at: string;
+  last_transaction_at: string | null;
+  asset: RawAssetResponse;
+}
+
+interface ExtendedAsset extends BaseAsset {
+  apr?: number;
+  location?: string;
+}
 
 interface TransactionWithAsset extends BaseTransaction {
-  asset: PortfolioAsset;
+  asset: ExtendedAsset;
 }
 
 interface Transaction extends Omit<BaseTransaction, 'type'> {
   type: 'buy' | 'sell';
-  asset: PortfolioAsset;
+  asset: ExtendedAsset;
 }
 
 interface PortfolioBalance {
@@ -29,10 +59,16 @@ interface PortfolioBalance {
   created_at: string;
   updated_at: string;
   last_transaction_at: string | null;
-  asset: PortfolioAsset;
+  asset: ExtendedAsset;
 }
 
-const isDebtAsset = (asset: PortfolioAsset): asset is PortfolioAsset & { type: 'debt' } => {
+interface StakingInfo {
+  honeyBalance: number;
+  honeyXBalance: number;
+  stakingPercentage: number;
+}
+
+const isDebtAsset = (asset: ExtendedAsset): asset is ExtendedAsset & { type: 'debt' } => {
   return asset.type === 'debt';
 };
 
@@ -46,6 +82,9 @@ export const Portfolio: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [assetType, setAssetType] = useState<'all' | 'debt' | 'commodities'>('all');
+  const [stakingInfo, setStakingInfo] = useState<StakingInfo | null>(null);
+  const [showStakingModal, setShowStakingModal] = useState(false);
+  const [selectedHoneyAsset, setSelectedHoneyAsset] = useState<PortfolioBalance | null>(null);
 
   // Check if we're in the admin portal context
   const isAdminPortal = window.location.pathname.startsWith('/admin') || (
@@ -108,26 +147,28 @@ export const Portfolio: React.FC = () => {
         throw new Error('User profile not found');
       }
 
-      const [transactionsData, balancesData] = await Promise.all([
+      const [transactionsData, balancesData, stakingData] = await Promise.all([
         transactionService.getUserTransactions(profile.user_id) as Promise<TransactionWithAsset[]>,
-        transactionService.getUserBalances(profile.user_id)
+        transactionService.getUserBalances(profile.user_id),
+        transactionService.getHoneyStakingInfo(profile.user_id).catch(err => {
+          console.warn('Failed to fetch staking info:', err);
+          return null;
+        })
       ]);
 
       console.log('Raw balances data:', balancesData);
+      console.log('Staking info:', stakingData);
 
       if (transactionsData && balancesData) {
         const mappedTransactions = transactionsData.map(t => ({
           ...t,
           asset: {
             ...t.asset,
-            type: t.asset.symbol.startsWith('DEBT') ? 'debt' : 'commodity',
-            id: t.asset_id,
-            created_at: t.created_at,
-            updated_at: t.updated_at
+            type: t.asset.symbol.startsWith('DEBT') ? 'debt' : 'commodity'
           }
         })) as Transaction[];
 
-        const mappedBalances = balancesData
+        const mappedBalances = (balancesData as RawBalanceResponse[])
           .filter(b => Number(b.balance) > 0)
           .map(b => {
             console.log('Raw asset details:', {
@@ -137,14 +178,16 @@ export const Portfolio: React.FC = () => {
               rawAsset: b.asset
             });
             
-            const isDebtAsset = b.asset.type === 'debt';
-            const debtDetails = isDebtAsset ? b.asset.debt_assets?.[0] : null;
+            const isDebtType = b.asset.type === 'debt';
+            const debtDetails = isDebtType ? b.asset.debt_assets?.[0] : null;
             
-            const asset: PortfolioAsset = {
+            const asset: ExtendedAsset = {
               ...b.asset,
-              type: isDebtAsset ? 'debt' : 'commodity',
-              price_per_token: Number(b.asset.price_per_token),
-              apr: debtDetails?.apr
+              type: isDebtType ? 'debt' : 'commodity',
+              apr: debtDetails?.apr,
+              location: isDebtType && debtDetails?.city && debtDetails?.state 
+                ? `${debtDetails.city}, ${debtDetails.state}`
+                : undefined
             };
             
             return {
@@ -165,6 +208,7 @@ export const Portfolio: React.FC = () => {
 
         setTransactions(mappedTransactions);
         setBalances(mappedBalances);
+        setStakingInfo(stakingData);
       }
     } catch (err) {
       console.error('Error fetching portfolio data:', err);
@@ -258,6 +302,130 @@ export const Portfolio: React.FC = () => {
     return true;
   });
 
+  const handleStakeClick = (balance: PortfolioBalance) => {
+    setSelectedHoneyAsset(balance);
+    setShowStakingModal(true);
+  };
+
+  const renderHoneyStakingInfo = (balance: PortfolioBalance) => {
+    if (balance.asset.symbol !== 'HONEY' || !stakingInfo) {
+      return null;
+    }
+
+    return (
+      <div className="flex items-center justify-between w-full mt-4">
+        <div className="flex items-center space-x-2">
+          <div className="relative w-6 h-6">
+            <div 
+              className="absolute inset-0 rounded-full border-2 border-[#FFD700]"
+              style={{
+                background: `conic-gradient(#FFD700 ${stakingInfo.stakingPercentage}%, transparent ${stakingInfo.stakingPercentage}%)`
+              }}
+            />
+          </div>
+          <span className="text-sm text-gray-500">
+            {stakingInfo.stakingPercentage.toFixed(1)}% staked
+          </span>
+        </div>
+        <Button
+          variant="secondary"
+          onClick={() => handleStakeClick(balance)}
+          className="text-sm"
+        >
+          Manage Staking
+        </Button>
+      </div>
+    );
+  };
+
+  const renderTransactionHistory = () => {
+    if (transactions.length === 0) {
+      return (
+        <div className="p-8 text-center text-light/60">
+          <p>No transactions yet. Make your first investment to get started!</p>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        <div className="grid grid-cols-5 gap-4 p-4 text-light text-base pl-5">
+          <div>Details</div>
+          <div>Amount</div>
+          <div>Date</div>
+          <div>Status</div>
+          <div>Actions</div>
+        </div>
+        
+        <div className="divide-y divide-[#2A2A2A]">
+          {transactions.map((transaction) => (
+            <div
+              key={transaction.id}
+              className="grid grid-cols-5 gap-4 p-4 items-center cursor-pointer hover:bg-dark-3/50"
+              onClick={(e) => handleTransactionClick(transaction, e)}
+            >
+              <div className="flex items-center space-x-3">
+                <img
+                  src={transaction.asset.main_image}
+                  alt={transaction.asset.name}
+                  className="w-12 h-12 rounded-full"
+                />
+                <div>
+                  <span className="text-light">
+                    {transaction.type === 'buy' ? 'Bought' : 'Sold'} {transaction.asset.symbol}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[#00D897] font-medium">
+                  {formatCurrency(transaction.amount * transaction.price_per_token)}
+                </p>
+                <p className="text-sm text-light/60">
+                  {transaction.amount} {transaction.asset.symbol}
+                </p>
+              </div>
+
+              <div className="text-light">
+                {formatDate(transaction.created_at)}
+              </div>
+
+              <div className="flex items-center text-light">
+                {getStatusDot(transaction.status)}
+                <span className="capitalize">{transaction.status}</span>
+              </div>
+
+              <div className="flex space-x-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="!bg-[#00D897] hover:!bg-[#00C085] w-[72px]"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleActionClick(transaction.asset_id, 'invest');
+                  }}
+                >
+                  Invest
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="!bg-[#3A3A3A] hover:!bg-[#454545] !text-light w-[72px]"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleActionClick(transaction.asset_id, 'sell');
+                  }}
+                >
+                  Sell
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   if (loading && !isRefreshing) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -293,7 +461,7 @@ export const Portfolio: React.FC = () => {
             Total Value: {formatCurrency(totalPortfolioValue)}
           </p>
         </div>
-        
+
         {/* Asset Type Filter */}
         <div>
           <div className="border-b border-light/10">
@@ -331,180 +499,107 @@ export const Portfolio: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="mt-8 mb-12">
-        <div className="bg-dark-2 rounded-lg overflow-hidden">
-          {filteredBalances.length > 0 ? (
-            <div>
-              {/* Table Headers */}
-              <div className="grid grid-cols-4 gap-8 p-4 text-light text-base pl-5">
-                <div>Name</div>
-                <div>Balance</div>
-                <div>Current Price</div>
-                <div>APR</div>
-              </div>
-              
-              {/* Table Rows */}
+        {/* Asset List */}
+        <div className="mt-8 mb-12">
+          <div className="bg-dark-2 rounded-lg overflow-hidden">
+            {filteredBalances.length > 0 ? (
               <div>
-                {filteredBalances.map((balance) => (
-                  <div key={balance.asset_id} className="grid grid-cols-4 gap-8 p-4 items-center hover:bg-light/5">
-                    {/* Name Column */}
-                    <div className="flex items-center gap-4 pl-1">
-                      <img
-                        src={balance.asset.main_image}
-                        alt={balance.asset.name}
-                        className="w-12 h-12 rounded-full"
-                      />
-                      <div>
-                        <div className="text-lg font-primary text-light">
-                          {balance.asset.symbol}
+                {/* Table Headers */}
+                <div className="grid grid-cols-4 gap-8 p-4 text-light text-base pl-5">
+                  <div>Name</div>
+                  <div>Balance</div>
+                  <div>Current Price</div>
+                  <div>APR</div>
+                </div>
+                
+                {/* Table Rows */}
+                <div>
+                  {filteredBalances.map((balance) => (
+                    <div key={balance.asset_id} className="grid grid-cols-4 gap-8 p-4 items-center hover:bg-light/5">
+                      <div className="flex items-center space-x-3">
+                        {balance.asset.main_image && (
+                          <img
+                            src={balance.asset.main_image}
+                            alt={balance.asset.name}
+                            className="w-10 h-10 rounded-full"
+                          />
+                        )}
+                        <div>
+                          <h3 className="text-lg font-semibold">
+                            {balance.asset.type === 'debt' ? balance.asset.location : balance.asset.name}
+                          </h3>
+                          <p className="text-sm text-gray-500">{balance.asset.symbol}</p>
                         </div>
-                        <div className="text-sm font-secondary text-light/60">
-                          Los Angeles, CA
+                      </div>
+                      <div>
+                        <div className="text-light">${balance.total_value.toLocaleString()}</div>
+                        <div className="text-sm text-light/60">
+                          {balance.balance.toFixed(4)} {balance.asset.symbol}
                         </div>
                       </div>
-                    </div>
-
-                    {/* Balance Column */}
-                    <div>
-                      <div className="text-lg font-primary text-light">
-                        {formatCurrency(balance.total_value)}
+                      <div className="text-light">
+                        ${balance.asset.price_per_token.toLocaleString()}
                       </div>
-                      <div className="text-sm font-secondary text-light/60">
-                        {balance.balance.toLocaleString()} {balance.asset.symbol}
+                      <div className="text-light">
+                        {balance.asset.apr ? `${balance.asset.apr.toFixed(2)}%` : 'N/A'}
                       </div>
                     </div>
-
-                    {/* Current Price Column */}
-                    <div>
-                      <div className="text-lg font-primary text-light">
-                        {formatCurrency(balance.asset.price_per_token)}
-                      </div>
-                    </div>
-
-                    {/* APR Column */}
-                    <div>
-                      <div className="text-lg font-primary text-light">
-                        {balance.asset.type === 'debt'
-                          ? `${balance.asset.apr || 0}%`
-                          : '10%'
-                        }
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center py-12">
-              <p className="text-light/60 text-lg mb-4">
-                You don't have any {assetType === 'all' ? 'assets' : assetType === 'debt' ? 'debt assets' : 'commodities'}.
-              </p>
-              <Button
-                variant="primary"
-                onClick={() => navigate('/app/invest')}
-                className="!bg-[#00D897] hover:!bg-[#00C085] px-8"
-              >
-                Buy {assetType === 'all' ? 'Assets' : assetType === 'debt' ? 'Debt' : 'Commodities'}
-              </Button>
-            </div>
-          )}
+            ) : (
+              <div className="flex flex-col items-center py-12">
+                <p className="text-light/60 text-lg mb-4">
+                  You don't have any {assetType === 'all' ? 'assets' : assetType === 'debt' ? 'debt assets' : 'commodities'}.
+                </p>
+                <Button
+                  variant="primary"
+                  onClick={() => navigate('/app/invest')}
+                  className="!bg-[#00D897] hover:!bg-[#00C085] px-8"
+                >
+                  Buy {assetType === 'all' ? 'Assets' : assetType === 'debt' ? 'Debt' : 'Commodities'}
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
-      <div className="pl-1">
-        <h2 className="text-xl font-semibold mb-4 text-light">Transaction History</h2>
-        <div className="bg-dark-2 rounded-lg overflow-hidden">
-          {transactions.length > 0 ? (
-            <div>
-              <div className="grid grid-cols-5 gap-4 p-4 text-light text-base pl-5">
-                <div>Details</div>
-                <div>Amount</div>
-                <div>Date</div>
-                <div>Status</div>
-                <div>Actions</div>
-              </div>
-              
-              <div className="divide-y divide-[#2A2A2A]">
-                {transactions.map((transaction, index) => (
-                  <div
-                    key={transaction.id}
-                    className={`grid grid-cols-5 gap-4 p-4 items-center cursor-pointer hover:bg-dark-3/50`}
-                    onClick={(e) => handleTransactionClick(transaction, e)}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <img
-                        src={transaction.asset.main_image}
-                        alt={transaction.asset.name}
-                        className="w-12 h-12 rounded-full"
-                      />
-                      <div>
-                        <span className="text-light">
-                          {transaction.type === 'buy' ? 'Bought' : 'Sold'} {transaction.asset.symbol}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="text-[#00D897] font-medium">
-                        {formatCurrency(transaction.amount * transaction.price_per_token)}
-                      </p>
-                      <p className="text-sm text-light/60">
-                        {transaction.amount} {transaction.asset.symbol}
-                      </p>
-                    </div>
-
-                    <div className="text-light">
-                      {formatDate(transaction.created_at)}
-                    </div>
-
-                    <div className="flex items-center text-light">
-                      {getStatusDot(transaction.status)}
-                      <span className="capitalize">{transaction.status}</span>
-                    </div>
-
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        className="!bg-[#00D897] hover:!bg-[#00C085] w-[72px]"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleActionClick(transaction.asset_id, 'invest');
-                        }}
-                      >
-                        Invest
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="!bg-[#3A3A3A] hover:!bg-[#454545] !text-light w-[72px]"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleActionClick(transaction.asset_id, 'sell');
-                        }}
-                      >
-                        Sell
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="p-8 text-center text-light/60">
-              <p>No transactions yet. Make your first investment to get started!</p>
-            </div>
-          )}
+        {/* Transaction History */}
+        <div className="pl-1">
+          <h2 className="text-xl font-semibold mb-4 text-light">Transaction History</h2>
+          <div className="bg-dark-2 rounded-lg overflow-hidden">
+            {renderTransactionHistory()}
+          </div>
         </div>
-      </div>
 
-      <OrderDetailPopup
-        isOpen={selectedTransaction !== null}
-        onClose={() => setSelectedTransaction(null)}
-        transaction={selectedTransaction!}
-      />
+        {/* Modals */}
+        {selectedTransaction && (
+          <OrderDetailPopup
+            isOpen={selectedTransaction !== null}
+            onClose={() => setSelectedTransaction(null)}
+            transaction={selectedTransaction}
+          />
+        )}
+
+        {selectedHoneyAsset && stakingInfo && (
+          <HoneyStakingModal
+            isOpen={showStakingModal}
+            onClose={() => {
+              setShowStakingModal(false);
+              setSelectedHoneyAsset(null);
+            }}
+            honeyBalance={stakingInfo.honeyBalance}
+            honeyXBalance={stakingInfo.honeyXBalance}
+            stakingPercentage={stakingInfo.stakingPercentage}
+            pricePerToken={selectedHoneyAsset.asset.price_per_token}
+            userId={selectedHoneyAsset.user_id}
+            onSuccess={() => {
+              fetchPortfolioData(false);
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 };

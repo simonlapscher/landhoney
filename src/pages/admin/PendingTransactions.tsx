@@ -110,7 +110,7 @@ export const PendingTransactions: React.FC = () => {
               <div className="col-span-1 capitalize text-light">{transaction.type}</div>
               <div className="col-span-2 text-light">{transaction.asset_symbol}</div>
               <div className="col-span-2">
-                <div className="text-light">${transaction.amount.toLocaleString()}</div>
+                <div className="text-light">${(transaction.amount * transaction.price_per_token).toLocaleString()}</div>
                 <div className="text-sm text-light/60">
                   {transaction.amount} {transaction.asset_symbol}
                 </div>
