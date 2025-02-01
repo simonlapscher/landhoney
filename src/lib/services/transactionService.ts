@@ -352,31 +352,38 @@ export const transactionService = {
         );
       }
 
-      // Create staking transaction
-      const { data: transaction, error: transactionError } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: userId,
-          asset_id: honeyAsset.id,
-          type: 'stake',
-          amount: amount,
-          price_per_token: honeyAsset.price_per_token,
-          status: 'pending',
-          metadata: {
-            reference: `STAKE_${Date.now()}`,
-            fee_usd: 0,
-            payment_method: 'USD'
-          },
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
+      // Get the HoneyX asset
+      const { data: honeyXAsset, error: honeyXError } = await supabase
+        .from('assets')
+        .select('*')
+        .eq('symbol', 'HONEYX')
         .single();
 
-      if (transactionError) {
-        console.error('Error creating stake transaction:', transactionError);
+      if (honeyXError || !honeyXAsset) {
+        console.error('Error fetching HoneyX asset:', honeyXError);
         throw new TransactionError(
-          'Failed to create stake transaction',
+          'Failed to fetch HoneyX asset',
+          'ASSET_ERROR',
+          honeyXError?.message
+        );
+      }
+
+      // Call the stake_honey function
+      const { data: transaction, error: transactionError } = await supabase.rpc(
+        'stake_honey',
+        {
+          p_user_id: userId,
+          p_amount: amount,
+          p_honey_id: honeyAsset.id,
+          p_honeyx_id: honeyXAsset.id,
+          p_price_per_token: honeyAsset.price_per_token
+        }
+      );
+
+      if (transactionError) {
+        console.error('Error in stake transaction:', transactionError);
+        throw new TransactionError(
+          'Failed to process stake transaction',
           'TRANSACTION_ERROR',
           transactionError.message
         );
@@ -416,31 +423,38 @@ export const transactionService = {
         );
       }
 
-      // Create unstaking transaction
-      const { data: transaction, error: transactionError } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: userId,
-          asset_id: honeyAsset.id,
-          type: 'unstake',
-          amount: amount,
-          price_per_token: honeyAsset.price_per_token,
-          status: 'pending',
-          metadata: {
-            reference: `UNSTAKE_${Date.now()}`,
-            fee_usd: 0,
-            payment_method: 'USD'
-          },
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
+      // Get the HoneyX asset
+      const { data: honeyXAsset, error: honeyXError } = await supabase
+        .from('assets')
+        .select('*')
+        .eq('symbol', 'HONEYX')
         .single();
 
-      if (transactionError) {
-        console.error('Error creating unstake transaction:', transactionError);
+      if (honeyXError || !honeyXAsset) {
+        console.error('Error fetching HoneyX asset:', honeyXError);
         throw new TransactionError(
-          'Failed to create unstake transaction',
+          'Failed to fetch HoneyX asset',
+          'ASSET_ERROR',
+          honeyXError?.message
+        );
+      }
+
+      // Call the unstake_honey function
+      const { data: transaction, error: transactionError } = await supabase.rpc(
+        'unstake_honey',
+        {
+          p_user_id: userId,
+          p_amount: amount,
+          p_honey_id: honeyAsset.id,
+          p_honeyx_id: honeyXAsset.id,
+          p_price_per_token: honeyAsset.price_per_token
+        }
+      );
+
+      if (transactionError) {
+        console.error('Error in unstake transaction:', transactionError);
+        throw new TransactionError(
+          'Failed to process unstake transaction',
           'TRANSACTION_ERROR',
           transactionError.message
         );

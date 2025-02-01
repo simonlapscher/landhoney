@@ -10,6 +10,7 @@ import { BaseAsset, DebtAsset, Asset } from '../../lib/types/asset';
 import { Transaction as BaseTransaction } from '../../lib/types/transaction';
 import { PortfolioAsset } from '../../types/portfolio';
 import { HoneyStakingModal } from './HoneyStakingModal';
+import { HoneyUnstakingModal } from './HoneyUnstakingModal';
 
 interface RawAssetResponse extends BaseAsset {
   debt_assets?: {
@@ -45,7 +46,7 @@ interface TransactionWithAsset extends BaseTransaction {
 }
 
 interface Transaction extends Omit<BaseTransaction, 'type'> {
-  type: 'buy' | 'sell';
+  type: 'buy' | 'sell' | 'stake' | 'unstake';
   asset: ExtendedAsset;
 }
 
@@ -85,6 +86,7 @@ export const Portfolio: React.FC = () => {
   const [stakingInfo, setStakingInfo] = useState<StakingInfo | null>(null);
   const [showStakingModal, setShowStakingModal] = useState(false);
   const [selectedHoneyAsset, setSelectedHoneyAsset] = useState<PortfolioBalance | null>(null);
+  const [showUnstakingModal, setShowUnstakingModal] = useState(false);
 
   // Check if we're in the admin portal context
   const isAdminPortal = window.location.pathname.startsWith('/admin') || (
@@ -297,16 +299,35 @@ export const Portfolio: React.FC = () => {
 
   const filteredBalances = balances
     .filter(balance => {
+      // Hide HoneyX from the list
+      if (balance.asset.symbol === 'HONEYX') return false;
+      
       if (assetType === 'all') return true;
       if (assetType === 'debt') return balance.asset.type === 'debt';
       if (assetType === 'commodities') return balance.asset.type === 'commodity';
       return true;
+    })
+    .map(balance => {
+      // For Honey, show combined balance of Honey + HoneyX
+      if (balance.asset.symbol === 'HONEY' && stakingInfo) {
+        return {
+          ...balance,
+          balance: stakingInfo.honeyBalance + stakingInfo.honeyXBalance,
+          total_value: (stakingInfo.honeyBalance + stakingInfo.honeyXBalance) * balance.asset.price_per_token
+        };
+      }
+      return balance;
     })
     .sort((a, b) => b.total_value - a.total_value);
 
   const handleStakeClick = (balance: PortfolioBalance) => {
     setSelectedHoneyAsset(balance);
     setShowStakingModal(true);
+  };
+
+  const handleUnstakeClick = (balance: PortfolioBalance) => {
+    setSelectedHoneyAsset(balance);
+    setShowUnstakingModal(true);
   };
 
   const renderHoneyStakingInfo = (balance: PortfolioBalance) => {
@@ -351,12 +372,12 @@ export const Portfolio: React.FC = () => {
 
     return (
       <div>
-        <div className="grid grid-cols-5 gap-4 p-4 text-light text-base pl-5">
-          <div>Details</div>
-          <div>Amount</div>
-          <div>Date</div>
-          <div>Status</div>
-          <div>Actions</div>
+        <div className="grid grid-cols-5 gap-4 p-4 text-light/60">
+          <div className="text-left">Details</div>
+          <div className="text-left">Amount</div>
+          <div className="text-left">Date</div>
+          <div className="text-left">Status</div>
+          <div className="text-left">Actions</div>
         </div>
         
         <div className="divide-y divide-[#2A2A2A]">
@@ -374,7 +395,9 @@ export const Portfolio: React.FC = () => {
                 />
                 <div>
                   <span className="text-light">
-                    {transaction.type === 'buy' ? 'Bought' : 'Sold'} {transaction.asset.symbol}
+                    {transaction.type === 'stake' ? 'Staked' : 
+                     transaction.type === 'unstake' ? 'Unstaked' :
+                     transaction.type === 'buy' ? 'Bought' : 'Sold'} {transaction.asset.symbol}
                   </span>
                 </div>
               </div>
@@ -508,43 +531,107 @@ export const Portfolio: React.FC = () => {
             {filteredBalances.length > 0 ? (
               <div>
                 {/* Table Headers */}
-                <div className="grid grid-cols-4 gap-8 p-4 text-light text-base pl-5">
-                  <div>Name</div>
-                  <div>Balance</div>
-                  <div>Current Price</div>
-                  <div>APR</div>
+                <div className="grid grid-cols-[minmax(250px,2fr)_minmax(200px,1.5fr)_minmax(150px,1fr)_minmax(100px,1fr)_minmax(200px,1fr)] gap-4 p-4 text-light/60">
+                  <div className="text-left">Name</div>
+                  <div className="text-left">Balance</div>
+                  <div className="text-left">Current Price</div>
+                  <div className="text-left">APR</div>
+                  <div className="text-left">Actions</div>
                 </div>
                 
                 {/* Table Rows */}
                 <div>
                   {filteredBalances.map((balance) => (
-                    <div key={balance.asset_id} className="grid grid-cols-4 gap-8 p-4 items-center hover:bg-light/5">
-                      <div className="flex items-center space-x-3">
-                        {balance.asset.main_image && (
-                          <img
-                            src={balance.asset.main_image}
-                            alt={balance.asset.name}
-                            className="w-10 h-10 rounded-full"
-                          />
-                        )}
+                    <div key={balance.asset_id} className="grid grid-cols-1 p-4 hover:bg-light/5">
+                      <div className="grid grid-cols-[minmax(250px,2fr)_minmax(200px,1.5fr)_minmax(150px,1fr)_minmax(100px,1fr)_minmax(200px,1fr)] gap-4 items-center">
+                        <div className="flex items-center">
+                          <div className="relative">
+                            {balance.asset.symbol === 'HONEY' && stakingInfo && (
+                              <div className="absolute inset-0 w-12 h-12 -left-1 -top-1">
+                                <svg 
+                                  className="absolute inset-0 w-full h-full -rotate-90"
+                                  viewBox="0 0 48 48"
+                                  style={{ zIndex: 20 }}
+                                >
+                                  <circle
+                                    cx="24"
+                                    cy="24"
+                                    r="21"
+                                    fill="none"
+                                    stroke="#2A2A2A"
+                                    strokeWidth="4"
+                                  />
+                                  <circle
+                                    cx="24"
+                                    cy="24"
+                                    r="21"
+                                    fill="none"
+                                    stroke="#FFD700"
+                                    strokeWidth="4"
+                                    strokeDasharray={`${(stakingInfo.stakingPercentage / 100) * (2 * Math.PI * 21)} ${2 * Math.PI * 21}`}
+                                    strokeLinecap="round"
+                                  />
+                                </svg>
+                              </div>
+                            )}
+                            <img
+                              src={balance.asset.main_image}
+                              alt={balance.asset.name}
+                              className="w-10 h-10 rounded-full relative"
+                              style={{
+                                zIndex: 10,
+                                border: balance.asset.symbol === 'HONEY' ? '2px solid transparent' : 'none',
+                                background: balance.asset.symbol === 'HONEY' ? '#1E1E1E' : 'transparent'
+                              }}
+                            />
+                          </div>
+                          <div className="ml-3">
+                            <h3 className="text-lg font-semibold truncate">
+                              {balance.asset.type === 'debt' ? balance.asset.location : balance.asset.name}
+                            </h3>
+                            {balance.asset.symbol === 'HONEY' && stakingInfo ? (
+                              <p className="text-sm text-gray-500">{stakingInfo.stakingPercentage.toFixed(1)}% staked</p>
+                            ) : (
+                              <p className="text-sm text-gray-500">{balance.asset.symbol}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-light truncate">${balance.total_value.toLocaleString()}</div>
+                          <div className="text-sm text-light/60 truncate">
+                            {balance.balance.toFixed(4)} {balance.asset.symbol}
+                          </div>
+                        </div>
+                        <div className="text-light truncate">
+                          ${balance.asset.price_per_token.toLocaleString()}
+                        </div>
+                        <div className="text-light truncate">
+                          {balance.asset.apr ? `${balance.asset.apr.toFixed(2)}%` : 'N/A'}
+                        </div>
                         <div>
-                          <h3 className="text-lg font-semibold">
-                            {balance.asset.type === 'debt' ? balance.asset.location : balance.asset.name}
-                          </h3>
-                          <p className="text-sm text-gray-500">{balance.asset.symbol}</p>
+                          {balance.asset.symbol === 'HONEY' && (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleStakeClick(balance)}
+                                className="whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium"
+                                style={{
+                                  background: `url(https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/Honey%20gradient.png)`,
+                                  backgroundSize: 'cover'
+                                }}
+                              >
+                                {stakingInfo && stakingInfo.stakingPercentage > 0 ? 'Stake More' : 'Stake'}
+                              </button>
+                              {stakingInfo && stakingInfo.stakingPercentage > 0 && (
+                                <button
+                                  onClick={() => handleUnstakeClick(balance)}
+                                  className="whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
+                                >
+                                  Unstake
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                      <div>
-                        <div className="text-light">${balance.total_value.toLocaleString()}</div>
-                        <div className="text-sm text-light/60">
-                          {balance.balance.toFixed(4)} {balance.asset.symbol}
-                        </div>
-                      </div>
-                      <div className="text-light">
-                        ${balance.asset.price_per_token.toLocaleString()}
-                      </div>
-                      <div className="text-light">
-                        {balance.asset.apr ? `${balance.asset.apr.toFixed(2)}%` : 'N/A'}
                       </div>
                     </div>
                   ))}
@@ -585,21 +672,38 @@ export const Portfolio: React.FC = () => {
         )}
 
         {selectedHoneyAsset && stakingInfo && (
-          <HoneyStakingModal
-            isOpen={showStakingModal}
-            onClose={() => {
-              setShowStakingModal(false);
-              setSelectedHoneyAsset(null);
-            }}
-            honeyBalance={stakingInfo.honeyBalance}
-            honeyXBalance={stakingInfo.honeyXBalance}
-            stakingPercentage={stakingInfo.stakingPercentage}
-            pricePerToken={selectedHoneyAsset.asset.price_per_token}
-            userId={selectedHoneyAsset.user_id}
-            onSuccess={() => {
-              fetchPortfolioData(false);
-            }}
-          />
+          <>
+            <HoneyStakingModal
+              isOpen={showStakingModal}
+              onClose={() => {
+                setShowStakingModal(false);
+                setSelectedHoneyAsset(null);
+              }}
+              honeyBalance={stakingInfo.honeyBalance}
+              honeyXBalance={stakingInfo.honeyXBalance}
+              stakingPercentage={stakingInfo.stakingPercentage}
+              pricePerToken={selectedHoneyAsset.asset.price_per_token}
+              userId={selectedHoneyAsset.user_id}
+              onSuccess={() => {
+                fetchPortfolioData(false);
+              }}
+            />
+            <HoneyUnstakingModal
+              isOpen={showUnstakingModal}
+              onClose={() => {
+                setShowUnstakingModal(false);
+                setSelectedHoneyAsset(null);
+              }}
+              honeyBalance={stakingInfo.honeyBalance}
+              honeyXBalance={stakingInfo.honeyXBalance}
+              stakingPercentage={stakingInfo.stakingPercentage}
+              pricePerToken={selectedHoneyAsset.asset.price_per_token}
+              userId={selectedHoneyAsset.user_id}
+              onSuccess={() => {
+                fetchPortfolioData(false);
+              }}
+            />
+          </>
         )}
       </div>
     </div>

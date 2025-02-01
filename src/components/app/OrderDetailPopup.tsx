@@ -7,7 +7,7 @@ interface OrderDetailPopupProps {
   onClose: () => void;
   transaction: {
     id: string;
-    type: 'buy' | 'sell';
+    type: 'buy' | 'sell' | 'stake' | 'unstake';
     amount: number;
     price_per_token: number;
     created_at: string;
@@ -74,7 +74,9 @@ export const OrderDetailPopup: React.FC<OrderDetailPopupProps> = ({
           {/* Header */}
           <div className="relative p-6 text-center border-b border-[#2D2D2D]">
             <h2 className="text-xl font-medium text-light">
-              {transaction.type === 'buy' ? 'Bought' : 'Sold'} {transaction.asset.symbol}
+              {transaction.type === 'buy' ? 'Bought' : 
+               transaction.type === 'sell' ? 'Sold' :
+               transaction.type === 'stake' ? 'Staked' : 'Unstaked'} {transaction.asset.symbol}
             </h2>
             <button
               onClick={onClose}

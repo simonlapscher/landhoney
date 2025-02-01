@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { transactionService } from '../../lib/services/transactionService';
 import { formatCurrency } from '../../utils/format';
-import { Button } from '../common/Button';
 import { IoMdInformationCircleOutline } from 'react-icons/io';
 import { FiEdit2 } from 'react-icons/fi';
 
-interface HoneyStakingModalProps {
+interface HoneyUnstakingModalProps {
   isOpen: boolean;
   onClose: () => void;
   honeyBalance: number;
@@ -29,7 +28,7 @@ const Tooltip: React.FC<TooltipProps> = ({ content }) => (
   </div>
 );
 
-export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
+export const HoneyUnstakingModal: React.FC<HoneyUnstakingModalProps> = ({
   isOpen,
   onClose,
   honeyBalance,
@@ -63,9 +62,9 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
   };
 
   const handleMaxClick = () => {
-    const maxUsdValue = honeyBalance * pricePerToken;
+    const maxUsdValue = honeyXBalance * pricePerToken;
     setInputValue(maxUsdValue.toFixed(2));
-    setAmount(honeyBalance.toString());
+    setAmount(honeyXBalance.toString());
   };
 
   // Reset input when modal closes
@@ -73,6 +72,7 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
     if (!isOpen) {
       setInputValue('');
       setAmount('');
+      setShowConfirmation(false);
     }
   }, [isOpen]);
 
@@ -86,15 +86,15 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
         throw new Error('Please enter a valid amount');
       }
 
-      if (numAmount > honeyBalance) {
-        throw new Error('Amount exceeds your Honey balance');
+      if (numAmount > honeyXBalance) {
+        throw new Error('Amount exceeds your staked Honey balance');
       }
 
-      await transactionService.stakeHoney(userId, numAmount);
+      await transactionService.unstakeHoney(userId, numAmount);
       onSuccess();
       onClose();
     } catch (err) {
-      console.error('Staking error:', err);
+      console.error('Unstaking error:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
@@ -116,7 +116,7 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
         <div className="flex justify-between items-center mb-8">
           <div className="flex-1" />
           <h2 className="flex-1 text-xl font-semibold text-center whitespace-nowrap">
-            {showConfirmation ? 'Confirm Stake' : 'Stake Honey'}
+            {showConfirmation ? 'Confirm Unstake' : 'Unstake Honey'}
           </h2>
           <div className="flex-1 flex justify-end">
             <button
@@ -140,7 +140,7 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
                   className="w-full bg-transparent text-5xl font-medium focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   placeholder="0"
                   min="0"
-                  max={honeyBalance * pricePerToken}
+                  max={honeyXBalance * pricePerToken}
                   step="0.01"
                 />
                 <button
@@ -179,7 +179,7 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
                           fill="none"
                           stroke="#FFD700"
                           strokeWidth="3"
-                          strokeDasharray={`${(stakingPercentage + (Number(amount || 0) / (honeyBalance + honeyXBalance) * 100)) / 100 * (2 * Math.PI * 21)} ${2 * Math.PI * 21}`}
+                          strokeDasharray={`${((honeyXBalance - Number(amount || 0)) / (honeyBalance + honeyXBalance) * 100 / 100) * (2 * Math.PI * 21)} ${2 * Math.PI * 21}`}
                           strokeLinecap="round"
                         />
                       </svg>
@@ -199,8 +199,8 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
                 </div>
               </div>
               <div className="text-right">
-                <div className="font-medium">{formatCurrency(honeyBalance * pricePerToken)}</div>
-                <div className="text-sm text-gray-400">Available</div>
+                <div className="font-medium">{formatCurrency(honeyXBalance * pricePerToken)}</div>
+                <div className="text-sm text-gray-400">Available to unstake</div>
               </div>
             </div>
 
@@ -212,14 +212,14 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
 
             <button
               onClick={() => setShowConfirmation(true)}
-              disabled={!amount || Number(amount) <= 0 || Number(amount) > honeyBalance}
+              disabled={!amount || Number(amount) <= 0 || Number(amount) > honeyXBalance}
               className="w-full py-3 px-4 rounded-lg text-black font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 background: `url(https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/Honey%20gradient.png)`,
                 backgroundSize: 'cover'
               }}
             >
-              Preview stake
+              Preview unstake
             </button>
           </>
         ) : (
@@ -246,7 +246,7 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
                       fill="none"
                       stroke="#FFD700"
                       strokeWidth="3"
-                      strokeDasharray={`${(stakingPercentage + (Number(amount || 0) / (honeyBalance + honeyXBalance) * 100)) / 100 * (2 * Math.PI * 29)} ${2 * Math.PI * 29}`}
+                      strokeDasharray={`${((honeyXBalance - Number(amount || 0)) / (honeyBalance + honeyXBalance) * 100 / 100) * (2 * Math.PI * 29)} ${2 * Math.PI * 29}`}
                       strokeLinecap="round"
                     />
                   </svg>
@@ -260,7 +260,7 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
                 </div>
               </div>
               <h3 className="text-2xl font-medium mb-1">
-                Stake {formatCurrency(usdValue)} of Honey
+                Unstake {formatCurrency(usdValue)} of Honey
               </h3>
               <p className="text-gray-400">
                 {Number(amount).toFixed(2)} HONEY
@@ -270,27 +270,6 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
             <div className="space-y-4 mb-8">
               <div className="flex justify-between items-center">
                 <div className="flex items-center">
-                  Earning rate
-                  <Tooltip content="The annual percentage yield you'll earn on your staked Honey" />
-                </div>
-                <div className="text-[#00D897]">8.8% APY</div>
-              </div>
-              <div className="flex justify-between items-center">
-                <div className="flex items-center">
-                  Earning wait time
-                  <Tooltip content="Time before your staked Honey starts earning rewards" />
-                </div>
-                <div>7 days</div>
-              </div>
-              <div className="flex justify-between items-center">
-                <div className="flex items-center">
-                  Payout frequency
-                  <Tooltip content="How often you'll receive staking rewards" />
-                </div>
-                <div>Monthly</div>
-              </div>
-              <div className="flex justify-between items-center">
-                <div className="flex items-center">
                   Unstaking wait time
                   <Tooltip content="Time required to unstake your Honey" />
                 </div>
@@ -298,9 +277,11 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
               </div>
             </div>
 
-            <p className="text-sm text-gray-400 mb-4">
-              Staking involves risks. <a href="#" className="text-[#FFD700] hover:text-[#E6C200]">Learn more</a>
-            </p>
+            <div className="bg-[#1A1A1A] rounded-lg p-4 mb-8 border border-[#2A2A2A]">
+              <p className="text-light/80">
+                Your Honey will continue to earn rewards during the unstaking wait time.
+              </p>
+            </div>
 
             <div className="flex items-center gap-4">
               <button
@@ -318,7 +299,7 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
                   backgroundSize: 'cover'
                 }}
               >
-                {loading ? 'Processing...' : 'Stake now'}
+                {loading ? 'Processing...' : 'Unstake now'}
               </button>
             </div>
           </>
