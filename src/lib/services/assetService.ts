@@ -36,6 +36,7 @@ export const assetService = {
           timestamp
         )
       `)
+      .neq('symbol', 'HONEYX')
       .order('type', { ascending: true })
       .order('created_at', { ascending: false });
 
@@ -44,7 +45,7 @@ export const assetService = {
 
     console.log('Full response from Supabase:', JSON.stringify(assets, null, 2));
 
-    return assets.map(asset => {
+    return assets.map((asset: any) => {
       if (asset.type === 'debt') {
         if (!asset.debt_assets?.length) {
           console.error('Missing debt_assets data for asset:', asset.id);
@@ -80,7 +81,7 @@ export const assetService = {
           remaining: remainingAmount,
           progress: ((fundedAmount / fundingGoal) * 100).toFixed(1) + '%'
         });
-        
+
         const mappedAsset = {
           ...asset,
           location,
@@ -143,6 +144,7 @@ export const assetService = {
         )
       `)
       .eq('id', id)
+      .neq('symbol', 'HONEYX')
       .single();
 
     if (error) {

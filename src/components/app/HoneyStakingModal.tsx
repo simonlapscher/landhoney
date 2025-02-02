@@ -4,6 +4,7 @@ import { formatCurrency } from '../../utils/format';
 import { Button } from '../common/Button';
 import { IoMdInformationCircleOutline } from 'react-icons/io';
 import { FiEdit2 } from 'react-icons/fi';
+import { CheckIcon } from '@heroicons/react/24/outline';
 
 interface HoneyStakingModalProps {
   isOpen: boolean;
@@ -42,6 +43,7 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
   const [amount, setAmount] = useState<string>('');
   const [inputValue, setInputValue] = useState<string>('');
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,17 +70,14 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
     setAmount(honeyBalance.toString());
   };
 
-  // Reset input when modal closes
-  React.useEffect(() => {
-    if (!isOpen) {
-      setInputValue('');
-      setAmount('');
-    }
-  }, [isOpen]);
-
-  const handleSubmit = async () => {
+  const handleStakeNowClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Stake now button clicked');
+    
     setError(null);
     setLoading(true);
+    console.log('Starting submit process...', { amount, showConfirmation, showSuccess });
 
     try {
       const numAmount = Number(amount);
@@ -90,14 +89,51 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
         throw new Error('Amount exceeds your Honey balance');
       }
 
-      await transactionService.stakeHoney(userId, numAmount);
-      onSuccess();
-      onClose();
+      console.log('Starting staking transaction...', { numAmount, userId });
+      const transaction = await transactionService.stakeHoney(userId, numAmount);
+      console.log('Staking transaction completed:', transaction);
+      
+      // Store the current amount before any state changes
+      const confirmedAmount = amount;
+      
+      setShowConfirmation(false);
+      setShowSuccess(true);
+      console.log('Set success state:', { showSuccess: true, showConfirmation: false });
     } catch (err) {
       console.error('Staking error:', err);
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : 'An error occurred while staking');
+      setShowSuccess(false);
     } finally {
       setLoading(false);
+      console.log('Final state:', { showSuccess, showConfirmation, error, loading });
+    }
+  };
+
+  // Reset input only when modal is explicitly closed
+  React.useEffect(() => {
+    if (!isOpen) {
+      // Only reset if we're not in success state
+      if (!showSuccess) {
+        setInputValue('');
+        setAmount('');
+        setShowConfirmation(false);
+        setShowSuccess(false);
+        setError(null);
+        setLoading(false);
+      }
+    }
+  }, [isOpen, showSuccess]);
+
+  // Add logging to track state changes
+  React.useEffect(() => {
+    console.log('State changed:', { showSuccess, showConfirmation, error, loading, amount, isOpen });
+  }, [showSuccess, showConfirmation, error, loading, amount, isOpen]);
+
+  const handleDone = () => {
+    console.log('Done button clicked');
+    if (showSuccess) {
+      onSuccess();
+      onClose();
     }
   };
 
@@ -108,27 +144,199 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
-          onClose();
+          if (showSuccess) {
+            handleDone();
+          } else {
+            onClose();
+          }
         }
       }}
     >
-      <div className="bg-[#1E1E1E] rounded-lg p-6 max-w-md w-full text-white border border-light/10">
+      <div className="bg-[#1E1E1E] rounded-lg p-6 max-w-md w-full text-white border border-light/10" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-8">
           <div className="flex-1" />
           <h2 className="flex-1 text-xl font-semibold text-center whitespace-nowrap">
-            {showConfirmation ? 'Confirm Stake' : 'Stake Honey'}
+            {showConfirmation ? 'Confirm Stake' : showSuccess ? (
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-7 h-7 rounded-full bg-[#00D897] flex items-center justify-center">
+                  <CheckIcon className="w-5 h-5 text-white" />
+                </div>
+                Confirmed Stake
+              </div>
+            ) : 'Stake Honey'}
           </h2>
           <div className="flex-1 flex justify-end">
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-300 text-3xl leading-none"
-            >
-              ×
-            </button>
+            {!showSuccess && (
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-300 text-3xl leading-none"
+              >
+                ×
+              </button>
+            )}
           </div>
         </div>
 
-        {!showConfirmation ? (
+        {showSuccess ? (
+          <>
+            <div className="flex flex-col items-center mb-6">
+              <div className="relative w-16 h-16 mb-4">
+                <div className="absolute inset-0">
+                  <svg 
+                    className="w-full h-full -rotate-90"
+                    viewBox="0 0 64 64"
+                  >
+                    <circle
+                      cx="32"
+                      cy="32"
+                      r="29"
+                      fill="none"
+                      stroke="#2A2A2A"
+                      strokeWidth="3"
+                    />
+                    <circle
+                      cx="32"
+                      cy="32"
+                      r="29"
+                      fill="none"
+                      stroke="#FFD700"
+                      strokeWidth="3"
+                      strokeDasharray={`${(stakingPercentage + (Number(amount || 0) / (honeyBalance + honeyXBalance) * 100)) / 100 * (2 * Math.PI * 29)} ${2 * Math.PI * 29}`}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </div>
+                <div className="absolute inset-0 p-1.5">
+                  <img
+                    src="https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/Honey%20gradient.png"
+                    alt="Honey"
+                    className="w-full h-full rounded-full"
+                  />
+                </div>
+              </div>
+              <h3 className="text-2xl font-medium mb-1">
+                Staked {formatCurrency(usdValue)} of Honey
+              </h3>
+              <p className="text-gray-400">
+                {Number(amount).toFixed(2)} HONEY
+              </p>
+            </div>
+
+            <button
+              onClick={handleDone}
+              className="w-full py-3 px-4 rounded-lg text-black font-medium"
+              style={{
+                background: `url(https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/Honey%20gradient.png)`,
+                backgroundSize: 'cover'
+              }}
+            >
+              Done
+            </button>
+          </>
+        ) : showConfirmation ? (
+          <>
+            <div className="flex flex-col items-center mb-6">
+              <div className="relative w-16 h-16 mb-4">
+                <div className="absolute inset-0">
+                  <svg 
+                    className="w-full h-full -rotate-90"
+                    viewBox="0 0 64 64"
+                  >
+                    <circle
+                      cx="32"
+                      cy="32"
+                      r="29"
+                      fill="none"
+                      stroke="#2A2A2A"
+                      strokeWidth="3"
+                    />
+                    <circle
+                      cx="32"
+                      cy="32"
+                      r="29"
+                      fill="none"
+                      stroke="#FFD700"
+                      strokeWidth="3"
+                      strokeDasharray={`${(stakingPercentage + (Number(amount || 0) / (honeyBalance + honeyXBalance) * 100)) / 100 * (2 * Math.PI * 29)} ${2 * Math.PI * 29}`}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </div>
+                <div className="absolute inset-0 p-1.5">
+                  <img
+                    src="https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/Honey%20gradient.png"
+                    alt="Honey"
+                    className="w-full h-full rounded-full"
+                  />
+                </div>
+              </div>
+              <h3 className="text-2xl font-medium mb-1">
+                Stake {formatCurrency(usdValue)} of Honey
+              </h3>
+              <p className="text-gray-400">
+                {Number(amount).toFixed(2)} HONEY
+              </p>
+            </div>
+
+            <div className="space-y-4 mb-8">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center">
+                  Earning rate
+                  <Tooltip content="The annual percentage yield you'll earn on your staked Honey" />
+                </div>
+                <div className="text-[#00D897]">8.8% APY</div>
+              </div>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center">
+                  Earning wait time
+                  <Tooltip content="Time before your staked Honey starts earning rewards" />
+                </div>
+                <div>7 days</div>
+              </div>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center">
+                  Payout frequency
+                  <Tooltip content="How often you'll receive staking rewards" />
+                </div>
+                <div>Monthly</div>
+              </div>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center">
+                  Unstaking wait time
+                  <Tooltip content="Time required to unstake your Honey" />
+                </div>
+                <div>7 days</div>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-400 mb-4">
+              Staking involves risks. <a href="#" className="text-[#FFD700] hover:text-[#E6C200]">Learn more</a>
+            </p>
+
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => {
+                  console.log('Edit button clicked');
+                  setShowConfirmation(false);
+                }}
+                className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700"
+              >
+                <FiEdit2 className="w-5 h-5" />
+              </button>
+              <button
+                onClick={handleStakeNowClick}
+                disabled={loading}
+                className="flex-1 py-3 px-4 rounded-lg text-black font-medium disabled:opacity-50"
+                style={{
+                  background: `url(https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/Honey%20gradient.png)`,
+                  backgroundSize: 'cover'
+                }}
+              >
+                {loading ? 'Processing...' : 'Stake now'}
+              </button>
+            </div>
+          </>
+        ) : (
           <>
             <div className="mb-8 px-4">
               <div className="relative flex items-baseline">
@@ -221,106 +429,6 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
             >
               Preview stake
             </button>
-          </>
-        ) : (
-          <>
-            <div className="flex flex-col items-center mb-6">
-              <div className="relative w-16 h-16 mb-4">
-                <div className="absolute inset-0">
-                  <svg 
-                    className="w-full h-full -rotate-90"
-                    viewBox="0 0 64 64"
-                  >
-                    <circle
-                      cx="32"
-                      cy="32"
-                      r="29"
-                      fill="none"
-                      stroke="#2A2A2A"
-                      strokeWidth="3"
-                    />
-                    <circle
-                      cx="32"
-                      cy="32"
-                      r="29"
-                      fill="none"
-                      stroke="#FFD700"
-                      strokeWidth="3"
-                      strokeDasharray={`${(stakingPercentage + (Number(amount || 0) / (honeyBalance + honeyXBalance) * 100)) / 100 * (2 * Math.PI * 29)} ${2 * Math.PI * 29}`}
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </div>
-                <div className="absolute inset-0 p-1.5">
-                  <img
-                    src="https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/Honey%20gradient.png"
-                    alt="Honey"
-                    className="w-full h-full rounded-full"
-                  />
-                </div>
-              </div>
-              <h3 className="text-2xl font-medium mb-1">
-                Stake {formatCurrency(usdValue)} of Honey
-              </h3>
-              <p className="text-gray-400">
-                {Number(amount).toFixed(2)} HONEY
-              </p>
-            </div>
-
-            <div className="space-y-4 mb-8">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center">
-                  Earning rate
-                  <Tooltip content="The annual percentage yield you'll earn on your staked Honey" />
-                </div>
-                <div className="text-[#00D897]">8.8% APY</div>
-              </div>
-              <div className="flex justify-between items-center">
-                <div className="flex items-center">
-                  Earning wait time
-                  <Tooltip content="Time before your staked Honey starts earning rewards" />
-                </div>
-                <div>7 days</div>
-              </div>
-              <div className="flex justify-between items-center">
-                <div className="flex items-center">
-                  Payout frequency
-                  <Tooltip content="How often you'll receive staking rewards" />
-                </div>
-                <div>Monthly</div>
-              </div>
-              <div className="flex justify-between items-center">
-                <div className="flex items-center">
-                  Unstaking wait time
-                  <Tooltip content="Time required to unstake your Honey" />
-                </div>
-                <div>7 days</div>
-              </div>
-            </div>
-
-            <p className="text-sm text-gray-400 mb-4">
-              Staking involves risks. <a href="#" className="text-[#FFD700] hover:text-[#E6C200]">Learn more</a>
-            </p>
-
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setShowConfirmation(false)}
-                className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700"
-              >
-                <FiEdit2 className="w-5 h-5" />
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={loading}
-                className="flex-1 py-3 px-4 rounded-lg text-black font-medium disabled:opacity-50"
-                style={{
-                  background: `url(https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/Honey%20gradient.png)`,
-                  backgroundSize: 'cover'
-                }}
-              >
-                {loading ? 'Processing...' : 'Stake now'}
-              </button>
-            </div>
           </>
         )}
       </div>

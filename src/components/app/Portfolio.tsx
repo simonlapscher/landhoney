@@ -225,6 +225,7 @@ export const Portfolio: React.FC = () => {
     }
   };
 
+  // Initial load
   useEffect(() => {
     console.log('Portfolio useEffect triggered:', {
       userEmail: user?.email,
@@ -232,15 +233,16 @@ export const Portfolio: React.FC = () => {
     });
     
     if (user && !isAdminPortal) {
-      fetchPortfolioData(false);
+      fetchPortfolioData(false); // Initial load should show loading state
     }
   }, [user, isAdminPortal]);
 
+  // Auto-refresh interval
   useEffect(() => {
     if (!user || isAdminPortal) return;
 
     const interval = setInterval(() => {
-      fetchPortfolioData(true);
+      fetchPortfolioData(true);  // Background refresh for subsequent updates
     }, 30000);
 
     return () => clearInterval(interval);
@@ -685,7 +687,7 @@ export const Portfolio: React.FC = () => {
               pricePerToken={selectedHoneyAsset.asset.price_per_token}
               userId={selectedHoneyAsset.user_id}
               onSuccess={() => {
-                fetchPortfolioData(false);
+                fetchPortfolioData(true);
               }}
             />
             <HoneyUnstakingModal
@@ -700,7 +702,7 @@ export const Portfolio: React.FC = () => {
               pricePerToken={selectedHoneyAsset.asset.price_per_token}
               userId={selectedHoneyAsset.user_id}
               onSuccess={() => {
-                fetchPortfolioData(false);
+                fetchPortfolioData(true);
               }}
             />
           </>

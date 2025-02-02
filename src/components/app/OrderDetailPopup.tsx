@@ -108,26 +108,32 @@ export const OrderDetailPopup: React.FC<OrderDetailPopupProps> = ({
               <span className="text-light">{formatCurrency(transaction.price_per_token)}</span>
             </div>
 
-            <div className="flex justify-between items-center">
-              <span className="text-light/60">Payment method</span>
-              <span className="text-light">
-                {transaction.metadata?.payment_method || 'USDC'}
-              </span>
-            </div>
+            {(transaction.type === 'buy' || transaction.type === 'sell') && (
+              <>
+                <div className="flex justify-between items-center">
+                  <span className="text-light/60">Payment method</span>
+                  <span className="text-light">
+                    {transaction.metadata?.payment_method || 'USDC'}
+                  </span>
+                </div>
 
-            <div className="flex justify-between items-center">
-              <span className="text-light/60">Subtotal</span>
-              <span className="text-light">{formatCurrency(subtotalAmount)}</span>
-            </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-light/60">Subtotal</span>
+                  <span className="text-light">{formatCurrency(subtotalAmount)}</span>
+                </div>
 
-            <div className="flex justify-between items-center">
-              <span className="text-light/60">Landhoney fee</span>
-              <span className="text-light">{formatCurrency(fee)}</span>
-            </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-light/60">Landhoney fee</span>
+                  <span className="text-light">{formatCurrency(fee)}</span>
+                </div>
+              </>
+            )}
 
             <div className="flex justify-between items-center font-medium">
               <span className="text-light/60">Total</span>
-              <span className="text-light">{formatCurrency(totalAmount)}</span>
+              <span className="text-light">
+                {formatCurrency(transaction.type === 'buy' || transaction.type === 'sell' ? totalAmount : subtotalAmount)}
+              </span>
             </div>
 
             <div className="flex justify-between items-center">
