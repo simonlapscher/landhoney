@@ -1,7 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, NavLink } from 'react-router-dom';
 import { adminSupabase } from '../../lib/supabase';
 import { checkAdminStatus } from '../../lib/adminAuth';
+
+const menuItems = [
+  { path: 'transactions', label: 'Pending Transactions' },
+  { path: 'prices', label: 'Price Management' },
+  { path: 'loans', label: 'Loan Distribution' },
+  { path: 'rewards', label: 'Staking Rewards' }
+];
 
 export const AdminLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -47,9 +54,26 @@ export const AdminLayout: React.FC = () => {
       <nav className="bg-dark-2 border-b border-dark-3">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
-            <div className="flex">
+            <div className="flex items-center space-x-8">
               <div className="flex-shrink-0 flex items-center">
                 <span className="text-xl font-bold text-light">Admin Portal</span>
+              </div>
+              <div className="flex space-x-4">
+                {menuItems.map(({ path, label }) => (
+                  <NavLink
+                    key={path}
+                    to={`/admin/${path}`}
+                    className={({ isActive }) =>
+                      `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'bg-primary text-dark'
+                          : 'text-light/60 hover:text-light hover:bg-dark-3'
+                      }`
+                    }
+                  >
+                    {label}
+                  </NavLink>
+                ))}
               </div>
             </div>
             <div className="flex items-center">

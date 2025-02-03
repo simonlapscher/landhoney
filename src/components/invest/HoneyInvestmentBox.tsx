@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Asset } from '../../lib/types/asset';
 import { InvestWidget } from './InvestWidget';
 import { SellWidget } from './SellWidget';
 import { Modal } from '../common/Modal';
+import { supabase } from '../../lib/supabase';
 
 interface HoneyInvestmentBoxProps {
   asset: Asset;
@@ -19,6 +20,50 @@ export const HoneyInvestmentBox: React.FC<HoneyInvestmentBoxProps> = ({
 }) => {
   const [showInvestModal, setShowInvestModal] = useState(false);
   const [showSellModal, setShowSellModal] = useState(false);
+  const [latestPrice, setLatestPrice] = useState<number>(asset.price_per_token);
+
+  useEffect(() => {
+    const fetchLatestPrice = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('assets')
+          .select('price_per_token')
+          .eq('symbol', 'HONEY')
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          setLatestPrice(data.price_per_token);
+        }
+      } catch (err) {
+        console.error('Error fetching latest price:', err);
+      }
+    };
+
+    fetchLatestPrice();
+
+    // Set up real-time subscription for price updates
+    const subscription = supabase
+      .channel('price_updates')
+      .on('postgres_changes', 
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'assets',
+          filter: 'symbol=eq.HONEY'
+        }, 
+        (payload) => {
+          if (payload.new && 'price_per_token' in payload.new) {
+            setLatestPrice(payload.new.price_per_token as number);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <>
@@ -36,7 +81,7 @@ export const HoneyInvestmentBox: React.FC<HoneyInvestmentBoxProps> = ({
           <p className="text-light/60 text-sm mb-1">Price</p>
           <div className="flex items-baseline">
             <p className="text-light text-2xl font-medium">
-              ${asset.price_per_token.toLocaleString()}
+              ${latestPrice.toLocaleString()}
             </p>
             <p className="text-light/60 text-sm ml-2">per Honey</p>
           </div>
@@ -66,7 +111,7 @@ export const HoneyInvestmentBox: React.FC<HoneyInvestmentBoxProps> = ({
         onClose={() => setShowInvestModal(false)}
       >
         <InvestWidget
-          asset={asset}
+          asset={{...asset, price_per_token: latestPrice}}
           onClose={() => setShowInvestModal(false)}
         />
       </Modal>
@@ -77,7 +122,7 @@ export const HoneyInvestmentBox: React.FC<HoneyInvestmentBoxProps> = ({
         onClose={() => setShowSellModal(false)}
       >
         <SellWidget
-          asset={asset}
+          asset={{...asset, price_per_token: latestPrice}}
           onClose={() => setShowSellModal(false)}
         />
       </Modal>

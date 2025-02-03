@@ -26,6 +26,8 @@ import { EmailVerification } from './components/onboarding/EmailVerification';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminLogin } from './pages/admin/Login';
 import { PendingTransactions } from './pages/admin/PendingTransactions';
+import { PriceManagement } from './pages/admin/PriceManagement';
+import { LoanDistribution } from './pages/admin/LoanDistribution';
 import { AuthProvider } from './lib/context/AuthContext';
 import { ProfilePage } from './components/profile/ProfilePage';
 
@@ -62,6 +64,8 @@ const App: React.FC = () => {
             <Route path="login" element={<AdminLogin />} />
             <Route element={<AdminLayout />}>
               <Route path="transactions" element={<PendingTransactions />} />
+              <Route path="prices" element={<PriceManagement />} />
+              <Route path="loans" element={<LoanDistribution />} />
               <Route index element={<Navigate to="transactions" replace />} />
             </Route>
           </Route>

@@ -95,18 +95,16 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset }) => {
               <h3 className="text-xl text-light mb-2">{asset.name}</h3>
               <p className="text-light/60">{asset.description}</p>
             </div>
-            {getLatestPrice(asset) && (
-              <div className="mb-8">
-                <div className="flex items-baseline gap-2">
-                  <p className="text-2xl text-light font-medium">
-                    ${getLatestPrice(asset)?.toLocaleString() || '0'}
-                  </p>
-                  {asset.symbol === 'HONEY' && (
-                    <p className="text-sm text-light/60">per Honey = 1oz gold</p>
-                  )}
-                </div>
+            <div className="mb-8">
+              <div className="flex items-baseline gap-2">
+                <p className="text-2xl text-light font-medium">
+                  ${asset.price_per_token.toLocaleString()}
+                </p>
+                {asset.symbol === 'HONEY' && (
+                  <p className="text-sm text-light/60">per Honey = 1oz gold</p>
+                )}
               </div>
-            )}
+            </div>
             <button 
               onClick={handleInvestClick}
               className="w-full bg-[#00D54B] text-dark font-medium py-3 px-6 rounded-lg hover:bg-[#00D54B]/90 transition-colors"

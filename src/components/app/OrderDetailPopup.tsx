@@ -7,7 +7,7 @@ interface OrderDetailPopupProps {
   onClose: () => void;
   transaction: {
     id: string;
-    type: 'buy' | 'sell' | 'stake' | 'unstake';
+    type: 'buy' | 'sell' | 'stake' | 'unstake' | 'loan_distribution';
     amount: number;
     price_per_token: number;
     created_at: string;
@@ -18,6 +18,8 @@ interface OrderDetailPopupProps {
     metadata?: {
       payment_method?: string;
       fee?: number;
+      distribution_id?: string;
+      distribution_type?: string;
     };
   };
 }
@@ -76,7 +78,8 @@ export const OrderDetailPopup: React.FC<OrderDetailPopupProps> = ({
             <h2 className="text-xl font-medium text-light">
               {transaction.type === 'buy' ? 'Bought' : 
                transaction.type === 'sell' ? 'Sold' :
-               transaction.type === 'stake' ? 'Staked' : 'Unstaked'} {transaction.asset.symbol}
+               transaction.type === 'stake' ? 'Staked' :
+               transaction.type === 'loan_distribution' ? 'Loan Distribution' : 'Unstaked'} {transaction.asset.symbol}
             </h2>
             <button
               onClick={onClose}
