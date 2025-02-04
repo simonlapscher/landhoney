@@ -42,6 +42,10 @@ export const ProtectedLayout: React.FC = () => {
             <NavLink
               key={path}
               to={`/app/${path}`}
+              onClick={(e) => {
+                e.preventDefault();
+                navigate(`/app/${path}`);
+              }}
               className={({ isActive }) =>
                 `flex items-center px-4 py-3 rounded-2xl transition-colors text-lg font-medium ${
                   isActive 

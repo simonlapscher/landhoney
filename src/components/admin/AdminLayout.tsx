@@ -16,7 +16,8 @@ const menuItems = [
   { path: 'prices', label: 'Price Management', icon: CurrencyDollarIcon },
   { path: 'loans', label: 'Loan Distribution', icon: BanknotesIcon },
   { path: 'payouts', label: 'Payout History', icon: DocumentCheckIcon },
-  { path: 'mint', label: 'Token Minting', icon: UserPlusIcon }
+  { path: 'mint', label: 'Token Minting', icon: UserPlusIcon },
+  { path: 'add-asset', label: 'Add Asset', icon: BanknotesIcon }
 ];
 
 export const AdminLayout: React.FC = () => {
@@ -71,6 +72,10 @@ export const AdminLayout: React.FC = () => {
             <NavLink
               key={path}
               to={`/admin/${path}`}
+              onClick={(e) => {
+                e.preventDefault();
+                navigate(`/admin/${path}`);
+              }}
               className={({ isActive }) =>
                 `flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
                   isActive

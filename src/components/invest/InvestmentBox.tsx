@@ -94,10 +94,7 @@ export const InvestmentBox: React.FC<InvestmentBoxProps> = ({
               style={{ width: `${Math.min(percentageFunded, 100)}%` }}
             />
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-light/60">
-              ${totalFundedAmount.toLocaleString()} funded
-            </span>
+          <div className="flex justify-end text-sm">
             <span className="text-light/60">
               ${remainingAmount.toLocaleString()} remaining
             </span>

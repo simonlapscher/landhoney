@@ -82,7 +82,7 @@ export const OrderDetailPopup: React.FC<OrderDetailPopupProps> = ({
                transaction.type === 'stake' ? 'Staked' :
                transaction.type === 'earn' ? 'Earned' :
                transaction.type === 'loan_distribution' ? `Loan Distribution for ${transaction.metadata?.debt_asset_symbol}` :
-               'Unstaked'} {transaction.type === 'loan_distribution' ? 'HONEY' : transaction.asset.symbol}
+               'Unstaked'} {transaction.type !== 'loan_distribution' && transaction.asset.symbol}
             </h2>
             <button
               onClick={onClose}

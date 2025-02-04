@@ -443,7 +443,7 @@ export const LoanDistribution: React.FC = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-6 mb-6">
+        <div className="space-y-6">
           <div>
             <label className="block text-light/60 mb-2">Select Asset</label>
             <select
@@ -461,33 +461,35 @@ export const LoanDistribution: React.FC = () => {
             </select>
           </div>
 
-          <div>
-            <label className="block text-light/60 mb-2">Period Start</label>
-            <input
-              type="date"
-              value={periodStart}
-              onChange={(e) => setPeriodStart(e.target.value)}
-              className="w-full px-3 py-2 bg-dark-2 border border-dark-3 rounded-lg text-white placeholder-light/40 focus:outline-none focus:border-primary focus:ring-0"
-              style={{ backgroundColor: '#1a1a1a' }}
-            />
-          </div>
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <label className="block text-light/60 mb-2">Period Start</label>
+              <input
+                type="date"
+                value={periodStart}
+                onChange={(e) => setPeriodStart(e.target.value)}
+                className="w-full px-3 py-2 bg-dark-2 border border-dark-3 rounded-lg text-white placeholder-light/40 focus:outline-none focus:border-primary focus:ring-0 [color-scheme:dark]"
+                style={{ backgroundColor: '#1a1a1a' }}
+              />
+            </div>
 
-          <div>
-            <label className="block text-light/60 mb-2">Period End</label>
-            <input
-              type="date"
-              value={periodEnd}
-              onChange={(e) => setPeriodEnd(e.target.value)}
-              className="w-full px-3 py-2 bg-dark-2 border border-dark-3 rounded-lg text-white placeholder-light/40 focus:outline-none focus:border-primary focus:ring-0"
-              style={{ backgroundColor: '#1a1a1a' }}
-            />
+            <div>
+              <label className="block text-light/60 mb-2">Period End</label>
+              <input
+                type="date"
+                value={periodEnd}
+                onChange={(e) => setPeriodEnd(e.target.value)}
+                className="w-full px-3 py-2 bg-dark-2 border border-dark-3 rounded-lg text-white placeholder-light/40 focus:outline-none focus:border-primary focus:ring-0 [color-scheme:dark]"
+                style={{ backgroundColor: '#1a1a1a' }}
+              />
+            </div>
           </div>
         </div>
 
         <button
           onClick={calculateDistribution}
           disabled={calculating}
-          className="w-full bg-primary text-dark font-medium py-3 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+          className="w-full bg-primary text-dark font-medium py-3 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 mt-6"
         >
           {calculating ? 'Calculating...' : 'Calculate Distribution'}
         </button>

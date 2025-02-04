@@ -32,6 +32,7 @@ import { PayoutHistory } from './pages/admin/PayoutHistory';
 import { TokenMinting } from './pages/admin/TokenMinting';
 import { AuthProvider } from './lib/context/AuthContext';
 import { ProfilePage } from './components/profile/ProfilePage';
+import { AddAsset } from './pages/admin/AddAsset';
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -70,6 +71,7 @@ const App: React.FC = () => {
               <Route path="loans" element={<LoanDistribution />} />
               <Route path="payouts" element={<PayoutHistory />} />
               <Route path="mint" element={<TokenMinting />} />
+              <Route path="add-asset" element={<AddAsset />} />
               <Route index element={<Navigate to="transactions" replace />} />
             </Route>
           </Route>
