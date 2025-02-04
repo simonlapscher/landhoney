@@ -1,22 +1,52 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Asset, DebtAsset, CommodityAsset } from '../../lib/types/asset';
+import { supabase } from '../../lib/supabaseClient';
 
 interface AssetCardProps {
   asset: Asset;
 }
 
+interface FundingStats {
+  asset_id: string;
+  symbol: string;
+  loan_amount: number;
+  total_funded_amount: number;
+  remaining_amount: number;
+  percent_funded: number;
+}
+
 export const AssetCard: React.FC<AssetCardProps> = ({ asset }) => {
   const navigate = useNavigate();
+  const [fundingStats, setFundingStats] = useState<FundingStats | null>(null);
+
+  useEffect(() => {
+    const fetchFundingStats = async () => {
+      if (isDebtAsset(asset)) {
+        const { data, error } = await supabase
+          .from('asset_funding_stats')
+          .select('*')
+          .eq('asset_id', asset.id)
+          .single();
+
+        if (!error && data) {
+          console.log('Funding stats for', asset.symbol, ':', data);
+          setFundingStats(data);
+        } else if (error) {
+          console.error('Error fetching funding stats:', error);
+        }
+      }
+    };
+
+    fetchFundingStats();
+  }, [asset.id]);
 
   const handleCardClick = () => {
-    console.log('Card clicked, navigating to:', `/app/invest/${asset.id}`);
     navigate(`/app/invest/${asset.id}`);
   };
 
   const handleInvestClick = (e: React.MouseEvent) => {
-    console.log('Invest button clicked, navigating to:', `/app/invest/${asset.id}`);
-    e.stopPropagation(); // Prevent card click when clicking the button
+    e.stopPropagation();
     navigate(`/app/invest/${asset.id}`);
   };
 
@@ -71,13 +101,13 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset }) => {
                   <div
                     className="bg-[#42DB98] h-2 rounded-full transition-all duration-500"
                     style={{
-                      width: `${Math.max(0, Math.min(100, (asset.funded_amount / asset.loan_amount) * 100))}%`,
+                      width: `${fundingStats ? fundingStats.percent_funded : 0}%`,
                     }}
                   />
                 </div>
                 <div className="flex justify-end text-sm">
                   <span className="text-light/60">
-                    ${Math.round(asset.remaining_amount).toLocaleString()} remaining
+                    ${fundingStats ? Math.round(fundingStats.remaining_amount).toLocaleString() : Math.round((asset as DebtAsset).loan_amount).toLocaleString()} remaining
                   </span>
                 </div>
               </div>

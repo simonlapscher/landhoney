@@ -60,6 +60,7 @@ BEGIN
         RAISE EXCEPTION 'Insufficient balance for sell transaction';
       END IF;
 
+      -- Subtract the amount from user's balance
       UPDATE user_balances
       SET 
         balance = balance - v_transaction.amount,

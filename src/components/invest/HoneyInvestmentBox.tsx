@@ -113,6 +113,7 @@ export const HoneyInvestmentBox: React.FC<HoneyInvestmentBoxProps> = ({
         <InvestWidget
           asset={{...asset, price_per_token: latestPrice}}
           onClose={() => setShowInvestModal(false)}
+          userBalance={userBalance}
         />
       </Modal>
 
@@ -124,6 +125,7 @@ export const HoneyInvestmentBox: React.FC<HoneyInvestmentBoxProps> = ({
         <SellWidget
           asset={{...asset, price_per_token: latestPrice}}
           onClose={() => setShowSellModal(false)}
+          userBalance={userBalance}
         />
       </Modal>
     </>

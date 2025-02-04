@@ -46,7 +46,7 @@ interface TransactionWithAsset extends BaseTransaction {
 }
 
 interface Transaction extends Omit<BaseTransaction, 'type'> {
-  type: 'buy' | 'sell' | 'stake' | 'unstake' | 'loan_distribution';
+  type: 'buy' | 'sell' | 'stake' | 'unstake' | 'loan_distribution' | 'earn';
   asset: ExtendedAsset;
 }
 
@@ -417,6 +417,7 @@ export const Portfolio: React.FC = () => {
                     {transaction.type === 'stake' ? 'Staked' : 
                      transaction.type === 'unstake' ? 'Unstaked' :
                      transaction.type === 'buy' ? 'Bought' :
+                     transaction.type === 'earn' ? 'Earned' :
                      transaction.type === 'loan_distribution' ? `Loan Distribution for ${transaction.metadata?.debt_asset_symbol}` :
                      'Sold'} {transaction.type !== 'loan_distribution' && transaction.asset.symbol}
                   </span>

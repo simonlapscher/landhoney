@@ -10,11 +10,12 @@ import { Transaction } from '../../lib/types/transaction';
 interface SellWidgetProps {
   asset: Asset;
   onClose: () => void;
+  userBalance?: number;
 }
 
 type WidgetState = 'input' | 'review' | 'confirmation' | 'payment_instructions';
 
-export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose }) => {
+export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose, userBalance = 0 }) => {
   // Input state
   const [amount, setAmount] = useState<string>('');
   const [amountType, setAmountType] = useState<'USD' | 'Token'>('Token');
@@ -30,10 +31,10 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose }) => {
 
   // Calculate fees and totals
   const numericAmount = parseFloat(amount) || 0;
-  const platformFee = numericAmount * 0.005; // 0.5%
-  const totalAmount = numericAmount - platformFee;
-  const tokenAmount = amountType === 'USD' ? numericAmount / asset.price_per_token : numericAmount;
-  const usdAmount = amountType === 'USD' ? numericAmount : numericAmount * asset.price_per_token;
+  const tokenAmount = amountType === 'Token' ? numericAmount : numericAmount / asset.price_per_token;
+  const usdAmount = amountType === 'Token' ? numericAmount * asset.price_per_token : numericAmount;
+  const platformFee = usdAmount * 0.005; // 0.5% of USD amount
+  const totalAmount = usdAmount - platformFee;
 
   // Validation checks
   const validateAmount = () => {
@@ -54,6 +55,11 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose }) => {
   const handleSubmit = async () => {
     if (!validateAmount() || !originalUser) return;
 
+    if (widgetState === 'input') {
+      setWidgetState('review');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       const response = await transactionService.createTransaction(
@@ -62,7 +68,8 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose }) => {
         tokenAmount,
         platformFee,
         paymentMethod,
-        asset.price_per_token
+        asset.price_per_token,
+        'sell'
       );
 
       setTransaction(response);
@@ -148,7 +155,13 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose }) => {
           <>
             {/* You're Selling Section */}
             <div className="bg-light/5 p-4 rounded-xl">
-              <h3 className="text-lg font-bold text-light mb-4">You're Selling</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-light">You're Selling</h3>
+                <div className="flex items-center">
+                  <span className="text-light/60 text-sm">Your balance:</span>
+                  <p className="text-light text-sm ml-2">{userBalance.toFixed(2)} {asset.symbol}</p>
+                </div>
+              </div>
               
               {/* Amount Type Label */}
               <p className="text-sm text-light/60 mb-2">Sell amount in:</p>
@@ -199,7 +212,7 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose }) => {
                     if (amountType === 'USD') {
                       setAmount(value.replace(/[^0-9.]/g, ''));
                     } else {
-                      setAmount(value);
+                      setAmount(value.replace(/[^0-9.]/g, ''));
                     }
                   }}
                   disabled={widgetState === 'review'}
@@ -218,10 +231,36 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose }) => {
             {/* You'll Receive Section */}
             <div className="bg-light/5 p-4 rounded-xl">
               <h3 className="text-lg font-bold text-light mb-4">You'll Receive</h3>
-              <div className="flex items-center justify-between">
-                <span className="text-light">{paymentMethod}</span>
-                <span className="text-light">${totalAmount.toFixed(2)}</span>
-              </div>
+              {widgetState === 'review' ? (
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-light/60">Selling</span>
+                    <span className="text-light">{tokenAmount.toFixed(2)} {asset.symbol}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-light/60">Price per token</span>
+                    <span className="text-light">${asset.price_per_token.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-light/60">Net sale</span>
+                    <span className="text-light">${usdAmount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-light/60">Fee (0.5%)</span>
+                    <span className="text-light">${platformFee.toFixed(2)}</span>
+                  </div>
+                  <div className="border-t border-light/10 my-2" />
+                  <div className="flex justify-between font-bold">
+                    <span className="text-light">Total to Receive</span>
+                    <span className="text-light">${totalAmount.toFixed(2)}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <span className="text-light">{paymentMethod}</span>
+                  <span className="text-light">${totalAmount.toFixed(2)}</span>
+                </div>
+              )}
             </div>
 
             {/* Action Buttons */}

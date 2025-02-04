@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
-import { InformationCircleIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect } from 'react';
+import { InformationCircleIcon } from '@heroicons/react/24/solid';
 import { Tooltip } from '../common/Tooltip';
 import { DebtAsset } from '../../lib/types/asset';
 import { Modal } from '../common/Modal';
 import { InvestWidget } from './InvestWidget';
+import { supabase } from '../../lib/supabase';
 
 interface InvestmentBoxProps {
   asset: DebtAsset;
-  userBalance?: number;
+  userBalance: number;
   onInvest: () => void;
   onSell: () => void;
 }
@@ -19,12 +20,28 @@ export const InvestmentBox: React.FC<InvestmentBoxProps> = ({
   onSell,
 }) => {
   const [showInvestModal, setShowInvestModal] = useState(false);
+  const [totalFundedAmount, setTotalFundedAmount] = useState(0);
+
+  useEffect(() => {
+    const fetchTotalFunding = async () => {
+      const { data, error } = await supabase
+        .from('user_balances')
+        .select('balance')
+        .eq('asset_id', asset.id);
+
+      if (!error && data) {
+        const total = data.reduce((sum, record) => sum + (record.balance || 0), 0);
+        setTotalFundedAmount(total);
+      }
+    };
+
+    fetchTotalFunding();
+  }, [asset.id]);
 
   // Calculate funding progress
   const fundingGoal = asset.loan_amount;
-  const fundedAmount = asset.funded_amount || 0;
-  const remainingAmount = fundingGoal - fundedAmount;
-  const percentageFunded = (fundedAmount / fundingGoal) * 100;
+  const remainingAmount = fundingGoal - totalFundedAmount;
+  const percentageFunded = (totalFundedAmount / fundingGoal) * 100;
 
   return (
     <>
@@ -74,10 +91,13 @@ export const InvestmentBox: React.FC<InvestmentBoxProps> = ({
           <div className="w-full bg-dark rounded-full h-2">
             <div
               className="bg-[#00D54B] h-2 rounded-full transition-all duration-500"
-              style={{ width: `${percentageFunded}%` }}
+              style={{ width: `${Math.min(percentageFunded, 100)}%` }}
             />
           </div>
-          <div className="flex justify-end text-sm">
+          <div className="flex justify-between text-sm">
+            <span className="text-light/60">
+              ${totalFundedAmount.toLocaleString()} funded
+            </span>
             <span className="text-light/60">
               ${remainingAmount.toLocaleString()} remaining
             </span>
@@ -114,6 +134,7 @@ export const InvestmentBox: React.FC<InvestmentBoxProps> = ({
         <InvestWidget
           asset={asset}
           onClose={() => setShowInvestModal(false)}
+          userBalance={userBalance}
         />
       </Modal>
     </>

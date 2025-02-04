@@ -46,14 +46,16 @@ export const transactionService = {
     amountTokens: number,
     feeUsd: number,
     paymentMethod: PaymentMethod,
-    pricePerToken: number
+    pricePerToken: number,
+    transactionType: 'buy' | 'sell' = 'buy'
   ): Promise<Transaction> {
     try {
       console.log('Starting transaction creation with:', {
         assetId,
         amountTokens,
         pricePerToken,
-        paymentMethod
+        paymentMethod,
+        transactionType
       });
 
       // First verify the session
@@ -120,7 +122,7 @@ export const transactionService = {
       console.log('Attempting to create transaction with data:', {
         user_id: profile.user_id,
         asset_id: assetId,
-        type: 'buy',
+        type: transactionType,
         amount: amountTokens,
         price_per_token: pricePerToken,
         status: 'pending'
@@ -131,7 +133,7 @@ export const transactionService = {
         .insert({
           user_id: profile.user_id,
           asset_id: assetId,
-          type: 'buy',
+          type: transactionType,
           amount: amountTokens,
           price_per_token: pricePerToken,
           metadata,

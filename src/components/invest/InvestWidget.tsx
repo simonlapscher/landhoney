@@ -11,11 +11,12 @@ import { Transaction } from '../../lib/types/transaction';
 interface InvestWidgetProps {
   asset: Asset;
   onClose: () => void;
+  userBalance?: number;
 }
 
 type WidgetState = 'input' | 'review' | 'confirmation' | 'payment_instructions';
 
-export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose }) => {
+export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, userBalance = 0 }) => {
   // Input state
   const [amount, setAmount] = useState<string>('');
   const [amountType, setAmountType] = useState<'USD' | 'Token'>('USD');
@@ -299,7 +300,13 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose }) =>
 
         {/* You're Buying Section */}
         <div className="bg-light/5 p-4 rounded-xl">
-          <h3 className="text-lg font-bold text-light mb-4">You're Buying</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-light">You're Buying</h3>
+            <div className="flex items-center">
+              <span className="text-light/60 text-sm">Your balance:</span>
+              <p className="text-light text-sm ml-2">{userBalance.toFixed(2)} {asset.symbol}</p>
+            </div>
+          </div>
           
           {/* Amount Type Label */}
           <p className="text-sm text-light/60 mb-2">Investment amount in:</p>
