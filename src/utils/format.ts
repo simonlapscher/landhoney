@@ -10,6 +10,20 @@ export const formatCurrency = (amount: number, currency: string = 'USD'): string
     currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
+    useGrouping: true,
+  }).format(amount);
+};
+
+/**
+ * Format a token amount with 4 decimal places and thousand separators
+ * @param amount The token amount to format
+ * @returns Formatted token amount string
+ */
+export const formatTokenAmount = (amount: number): string => {
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+    useGrouping: true,
   }).format(amount);
 };
 

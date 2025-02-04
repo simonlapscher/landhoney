@@ -9,6 +9,7 @@ import { assetService } from '../../lib/services/assetService';
 import { transactionService } from '../../lib/services/transactionService';
 import { useAuth } from '../../lib/context/AuthContext';
 import { LoadingSpinner } from '../common/LoadingSpinner';
+import { SellWidget } from './SellWidget';
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ');
@@ -19,6 +20,7 @@ export const AssetDetail: React.FC = () => {
   const [asset, setAsset] = useState<Asset | null>(null);
   const [loading, setLoading] = useState(true);
   const [userBalance, setUserBalance] = useState(0);
+  const [showSellWidget, setShowSellWidget] = useState(false);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -67,8 +69,13 @@ export const AssetDetail: React.FC = () => {
 
   // Use the images array from the asset if available
   const images = asset.type === 'debt' && (asset as DebtAsset).images 
-    ? (asset as DebtAsset).images || [asset.main_image]
+    ? Array.isArray((asset as DebtAsset).images) 
+      ? (asset as DebtAsset).images?.map((img: string | { url: string }) => 
+          typeof img === 'string' ? img : img.url) || [asset.main_image]
+      : [asset.main_image]
     : [asset.main_image];
+
+  console.log('Images array for gallery:', images);
 
   console.log('Current asset state:', {
     type: asset?.type,
@@ -193,12 +200,23 @@ export const AssetDetail: React.FC = () => {
         {/* Investment Box */}
         <div className="w-96">
           {asset.type === 'debt' ? (
-            <InvestmentBox
-              asset={asset as DebtAsset}
-              userBalance={userBalance}
-              onInvest={() => {}}
-              onSell={() => {}}
-            />
+            <>
+              <InvestmentBox
+                asset={asset as DebtAsset}
+                userBalance={userBalance}
+                onInvest={() => {}}
+                onSell={() => setShowSellWidget(true)}
+              />
+              {showSellWidget && (
+                <div className="fixed inset-0 bg-dark/80 backdrop-blur-sm flex items-center justify-center z-50">
+                  <SellWidget
+                    asset={asset}
+                    onClose={() => setShowSellWidget(false)}
+                    userBalance={userBalance}
+                  />
+                </div>
+              )}
+            </>
           ) : asset.type === 'commodity' && asset.symbol === 'HONEY' ? (
             <HoneyInvestmentBox
               asset={asset}

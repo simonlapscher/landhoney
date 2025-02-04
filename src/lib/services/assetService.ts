@@ -95,7 +95,10 @@ export const assetService = {
           funded_amount: numericValues.funded_amount,
           remaining_amount: numericValues.remaining_amount,
           funding_progress: (numericValues.funded_amount / numericValues.funding_goal) * 100,
-          images: debtDetails.images || [asset.main_image]
+          images: [
+            asset.main_image,
+            ...(debtDetails.images || [])
+          ].filter(Boolean)
         } as DebtAsset;
         
         console.log('Mapped debt asset:', mappedAsset);
@@ -185,7 +188,10 @@ export const assetService = {
         funded_amount: fundedAmount,
         remaining_amount: remainingAmount,
         funding_progress: (fundedAmount / fundingGoal) * 100,
-        images: debtDetails.images || [asset.main_image]
+        images: [
+          asset.main_image,
+          ...(debtDetails.images || [])
+        ].filter(Boolean)
       } as DebtAsset;
 
       console.log('Mapped debt asset:', mappedAsset);

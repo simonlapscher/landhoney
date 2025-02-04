@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { formatCurrency } from '../../utils/format';
+import { formatCurrency, formatTokenAmount } from '../../utils/format';
 import { Button } from '../common/Button';
 import { useNavigate } from 'react-router-dom';
 import { OrderDetailPopup } from './OrderDetailPopup';
@@ -426,13 +426,10 @@ export const Portfolio: React.FC = () => {
 
               <div>
                 <p className="text-[#00D897] font-medium">
-                  ${(transaction.amount * transaction.price_per_token).toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
-                  })}
+                  {formatCurrency(transaction.amount * transaction.price_per_token)}
                 </p>
                 <p className="text-sm text-light/60">
-                  {transaction.amount} {transaction.asset.symbol}
+                  {formatTokenAmount(transaction.amount)} {transaction.asset.symbol}
                 </p>
               </div>
 
@@ -622,13 +619,15 @@ export const Portfolio: React.FC = () => {
                           </div>
                         </div>
                         <div className="min-w-0">
-                          <div className="text-light truncate">${balance.total_value.toLocaleString()}</div>
+                          <div className="text-light truncate">
+                            {formatCurrency(balance.total_value)}
+                          </div>
                           <div className="text-sm text-light/60 truncate">
-                            {balance.balance.toFixed(4)} {balance.asset.symbol}
+                            {formatTokenAmount(balance.balance)} {balance.asset.symbol}
                           </div>
                         </div>
                         <div className="text-light truncate">
-                          ${balance.asset.price_per_token.toLocaleString()}
+                          {formatCurrency(balance.asset.price_per_token)}
                         </div>
                         <div className="text-light truncate">
                           {balance.asset.apr ? `${balance.asset.apr.toFixed(2)}%` : 'N/A'}

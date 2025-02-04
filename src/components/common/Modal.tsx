@@ -39,14 +39,6 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children }) => {
       {/* Modal */}
       <div className="relative min-h-screen flex items-center justify-center p-4">
         <div className="relative">
-          {/* Close button */}
-          <button
-            onClick={onClose}
-            className="absolute -top-2 -right-2 z-10 p-1 rounded-full bg-light/10 text-light hover:bg-light/20 transition-colors"
-          >
-            <XMarkIcon className="w-5 h-5" />
-          </button>
-
           {children}
         </div>
       </div>

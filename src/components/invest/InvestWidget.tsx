@@ -22,6 +22,7 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
   const [amountType, setAmountType] = useState<'USD' | 'Token'>('USD');
   const [paymentMethod, setPaymentMethod] = useState<'USD' | 'USDC'>('USD');
   const [widgetState, setWidgetState] = useState<WidgetState>('input');
+  const [showSuccess, setShowSuccess] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const { originalUser, isLoading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -290,7 +291,23 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
   }
 
   return (
-    <div className="max-w-lg mx-auto bg-dark/95 p-6 rounded-2xl shadow-xl border border-light/10">
+    <div className="max-w-lg mx-auto bg-[#1E1E1E] p-6 rounded-2xl shadow-xl border border-light/10">
+      <div className="flex justify-between items-center mb-8">
+        <div className="flex-1" />
+        <h2 className="flex-1 text-xl font-semibold text-center whitespace-nowrap">
+          {widgetState === 'review' ? 'Confirm Investment' : `Invest in ${asset.symbol}`}
+        </h2>
+        <div className="flex-1 flex justify-end">
+          {!showSuccess && (
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-300 text-3xl leading-none"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </div>
       <div className="space-y-6">
         {validationError && (
           <div className="p-4 bg-tertiary-pink/10 border border-tertiary-pink rounded-lg text-tertiary-pink">

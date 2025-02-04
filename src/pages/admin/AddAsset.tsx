@@ -82,16 +82,16 @@ export const AddAsset: React.FC = () => {
         }
 
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const filePath = `${user.id}/${type}/${fileName}`;
+        // Use a simpler path structure without user ID
+        const filePath = `assets/${type}/${fileName}`;
 
         console.log('Uploading file:', {
           name: file.name,
           type: file.type,
-          size: file.size,
           path: filePath
         });
 
-        const { error: uploadError, data: uploadData } = await adminSupabase.storage
+        const { error: uploadError } = await adminSupabase.storage
           .from('assets')
           .upload(filePath, file, {
             upsert: true,
@@ -103,8 +103,6 @@ export const AddAsset: React.FC = () => {
           throw uploadError;
         }
 
-        console.log('Upload successful:', uploadData);
-
         // Get the public URL
         const { data: publicUrlData } = adminSupabase.storage
           .from('assets')
@@ -114,7 +112,7 @@ export const AddAsset: React.FC = () => {
           throw new Error('Failed to generate public URL for uploaded file');
         }
 
-        console.log('Generated public URL:', publicUrlData.publicUrl);
+        console.log('Generated URL:', publicUrlData.publicUrl);
 
         setUploadProgress((prev) => prev + (100 / files.length));
 
@@ -133,6 +131,7 @@ export const AddAsset: React.FC = () => {
         if (!uploadedFiles[0]?.url) {
           throw new Error('Failed to get URL for main image');
         }
+        console.log('Setting main image:', uploadedFiles[0].url);
         setFormData(prev => ({
           ...prev,
           main_image: uploadedFiles[0].url
@@ -154,42 +153,21 @@ export const AddAsset: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setSuccess(null);
 
     try {
-      // Check if symbol already exists
-      const { data: existingAsset, error: checkError } = await adminSupabase
-        .from('assets')
-        .select('symbol')
-        .eq('symbol', formData.symbol.toUpperCase())
-        .single();
-
-      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 means not found, which is what we want
-        throw checkError;
-      }
-
-      if (existingAsset) {
-        throw new Error(`Asset symbol "${formData.symbol}" is already in use. Please choose a different symbol.`);
-      }
-
-      // Calculate token supply based on loan amount
-      const tokenSupply = formData.loan_amount * 100; // 100 tokens per dollar
-      const pricePerToken = formData.loan_amount / tokenSupply;
-      
       // Insert into assets table
       const { data: assetData, error: assetError } = await adminSupabase
         .from('assets')
         .insert({
           name: formData.name,
-          symbol: formData.symbol.toUpperCase(), // Ensure symbol is uppercase
+          symbol: formData.symbol.toUpperCase(),
           type: 'debt',
-          description: formData.description,
           main_image: formData.main_image,
-          price_per_token: pricePerToken,
-          token_supply: tokenSupply,
+          description: formData.description,
+          price_per_token: 1.00, // Set to $1.00
+          token_supply: formData.loan_amount,
           min_investment: formData.min_investment,
-          max_investment: formData.max_investment,
-          created_by: (await adminSupabase.auth.getUser()).data.user?.id
+          max_investment: formData.max_investment
         })
         .select()
         .single();
@@ -201,17 +179,17 @@ export const AddAsset: React.FC = () => {
         .from('debt_assets')
         .insert({
           asset_id: assetData.id,
-          apr: formData.apr,
-          term_months: formData.term_months,
-          loan_amount: formData.loan_amount,
-          status: 'FUNDING',
           address: formData.address,
           city: formData.city,
           state: formData.state,
           zip_code: formData.zip_code,
+          loan_amount: formData.loan_amount,
+          term_months: formData.term_months,
+          apr: formData.apr,
           appraised_value: formData.appraised_value,
           loan_maturity_date: formData.loan_maturity_date,
-          images: formData.images,
+          status: 'FUNDING',
+          images: formData.images.map(img => img.url),
           documents: formData.documents
         });
 
@@ -220,7 +198,6 @@ export const AddAsset: React.FC = () => {
         throw new Error(`Failed to create debt asset: ${debtError.message}`);
       }
 
-      // Set success state instead of navigating
       setSuccess({ assetId: assetData.id, name: assetData.name });
       setFormData({
         name: '',
