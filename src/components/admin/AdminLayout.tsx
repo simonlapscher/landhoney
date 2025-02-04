@@ -7,6 +7,7 @@ const menuItems = [
   { path: 'transactions', label: 'Pending Transactions' },
   { path: 'prices', label: 'Price Management' },
   { path: 'loans', label: 'Loan Distribution' },
+  { path: 'payouts', label: 'Payout History' },
   { path: 'rewards', label: 'Staking Rewards' }
 ];
 

@@ -28,6 +28,7 @@ import { AdminLogin } from './pages/admin/Login';
 import { PendingTransactions } from './pages/admin/PendingTransactions';
 import { PriceManagement } from './pages/admin/PriceManagement';
 import { LoanDistribution } from './pages/admin/LoanDistribution';
+import { PayoutHistory } from './pages/admin/PayoutHistory';
 import { AuthProvider } from './lib/context/AuthContext';
 import { ProfilePage } from './components/profile/ProfilePage';
 
@@ -66,6 +67,7 @@ const App: React.FC = () => {
               <Route path="transactions" element={<PendingTransactions />} />
               <Route path="prices" element={<PriceManagement />} />
               <Route path="loans" element={<LoanDistribution />} />
+              <Route path="payouts" element={<PayoutHistory />} />
               <Route index element={<Navigate to="transactions" replace />} />
             </Route>
           </Route>

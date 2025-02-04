@@ -391,24 +391,44 @@ export const Portfolio: React.FC = () => {
             >
               <div className="flex items-center space-x-3">
                 <img
-                  src={transaction.asset.main_image}
-                  alt={transaction.asset.name}
+                  src={(() => {
+                    const imageUrl = transaction.type === 'loan_distribution' && transaction.metadata?.source_asset_id
+                      ? transaction.metadata.source_asset_main_image
+                      : transaction.asset.main_image;
+                    console.log('Transaction:', {
+                      type: transaction.type,
+                      amount: transaction.amount,
+                      symbol: transaction.asset.symbol,
+                      metadata: transaction.metadata,
+                      imageUrl: imageUrl,
+                      id: transaction.id
+                    });
+                    return imageUrl;
+                  })()}
+                  alt={transaction.metadata?.debt_asset_name || transaction.asset.name}
                   className="w-12 h-12 rounded-full"
+                  onError={(e) => {
+                    console.error('Image failed to load:', e.currentTarget.src);
+                    e.currentTarget.src = transaction.asset.main_image; // Fallback to main image
+                  }}
                 />
                 <div>
                   <span className="text-light">
                     {transaction.type === 'stake' ? 'Staked' : 
                      transaction.type === 'unstake' ? 'Unstaked' :
                      transaction.type === 'buy' ? 'Bought' :
-                     transaction.type === 'loan_distribution' ? 'Loan Distribution' :
-                     'Sold'} {transaction.asset.symbol}
+                     transaction.type === 'loan_distribution' ? `Loan Distribution for ${transaction.metadata?.debt_asset_symbol}` :
+                     'Sold'} {transaction.type !== 'loan_distribution' && transaction.asset.symbol}
                   </span>
                 </div>
               </div>
 
               <div>
                 <p className="text-[#00D897] font-medium">
-                  {formatCurrency(transaction.amount * transaction.price_per_token)}
+                  ${(transaction.amount * transaction.price_per_token).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}
                 </p>
                 <p className="text-sm text-light/60">
                   {transaction.amount} {transaction.asset.symbol}

@@ -20,6 +20,7 @@ interface OrderDetailPopupProps {
       fee?: number;
       distribution_id?: string;
       distribution_type?: string;
+      debt_asset_symbol?: string;
     };
   };
 }
@@ -79,7 +80,8 @@ export const OrderDetailPopup: React.FC<OrderDetailPopupProps> = ({
               {transaction.type === 'buy' ? 'Bought' : 
                transaction.type === 'sell' ? 'Sold' :
                transaction.type === 'stake' ? 'Staked' :
-               transaction.type === 'loan_distribution' ? 'Loan Distribution' : 'Unstaked'} {transaction.asset.symbol}
+               transaction.type === 'loan_distribution' ? `Loan Distribution for ${transaction.metadata?.debt_asset_symbol}` :
+               'Unstaked'} {transaction.type === 'loan_distribution' ? 'HONEY' : transaction.asset.symbol}
             </h2>
             <button
               onClick={onClose}
@@ -92,7 +94,12 @@ export const OrderDetailPopup: React.FC<OrderDetailPopupProps> = ({
           {/* Amount Display */}
           <div className="px-6 py-8 text-center border-b border-[#2D2D2D]">
             <div className="text-4xl font-medium text-[#00D897]">
-              {formatCurrency(subtotalAmount)}
+              {(subtotalAmount).toLocaleString('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              })}
             </div>
             <div className="text-light/60 mt-1">
               {transaction.amount} {transaction.asset.symbol}
@@ -108,7 +115,14 @@ export const OrderDetailPopup: React.FC<OrderDetailPopupProps> = ({
 
             <div className="flex justify-between items-center">
               <span className="text-light/60">Price</span>
-              <span className="text-light">{formatCurrency(transaction.price_per_token)}</span>
+              <span className="text-light">
+                {transaction.price_per_token.toLocaleString('en-US', {
+                  style: 'currency',
+                  currency: 'USD',
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2
+                })}
+              </span>
             </div>
 
             {(transaction.type === 'buy' || transaction.type === 'sell') && (
@@ -122,12 +136,26 @@ export const OrderDetailPopup: React.FC<OrderDetailPopupProps> = ({
 
                 <div className="flex justify-between items-center">
                   <span className="text-light/60">Subtotal</span>
-                  <span className="text-light">{formatCurrency(subtotalAmount)}</span>
+                  <span className="text-light">
+                    {subtotalAmount.toLocaleString('en-US', {
+                      style: 'currency',
+                      currency: 'USD',
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })}
+                  </span>
                 </div>
 
                 <div className="flex justify-between items-center">
                   <span className="text-light/60">Landhoney fee</span>
-                  <span className="text-light">{formatCurrency(fee)}</span>
+                  <span className="text-light">
+                    {fee.toLocaleString('en-US', {
+                      style: 'currency',
+                      currency: 'USD',
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2
+                    })}
+                  </span>
                 </div>
               </>
             )}
@@ -135,7 +163,13 @@ export const OrderDetailPopup: React.FC<OrderDetailPopupProps> = ({
             <div className="flex justify-between items-center font-medium">
               <span className="text-light/60">Total</span>
               <span className="text-light">
-                {formatCurrency(transaction.type === 'buy' || transaction.type === 'sell' ? totalAmount : subtotalAmount)}
+                {(transaction.type === 'buy' || transaction.type === 'sell' ? totalAmount : subtotalAmount)
+                  .toLocaleString('en-US', {
+                    style: 'currency',
+                    currency: 'USD',
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}
               </span>
             </div>
 

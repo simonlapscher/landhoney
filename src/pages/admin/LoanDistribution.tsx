@@ -8,6 +8,9 @@ interface Asset {
   name: string;
   symbol: string;
   type: string;
+  loan_amount: number;  // loan amount
+  apr: number;     // loan APR
+  asset_id: string;  // reference to the assets table ID
 }
 
 interface UserHolding {
@@ -34,6 +37,8 @@ interface Holding {
   user_id: string;
   average_balance: number;
   days_held: number;
+  total_dollar_days: number;
+  share_of_distribution: number;
 }
 
 interface User {
@@ -41,10 +46,21 @@ interface User {
   email: string;
 }
 
+interface DebtAssetResponse {
+  id: string;
+  loan_amount: number;
+  apr: number;
+  asset_id: string;
+  assets: {
+    name: string;
+    symbol: string;
+    type: string;
+  };
+}
+
 export const LoanDistribution: React.FC = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [selectedAsset, setSelectedAsset] = useState<string>('');
-  const [distributionAmount, setDistributionAmount] = useState<string>('');
   const [periodStart, setPeriodStart] = useState<string>('');
   const [periodEnd, setPeriodEnd] = useState<string>('');
   const [userHoldings, setUserHoldings] = useState<UserHolding[]>([]);
@@ -53,6 +69,11 @@ export const LoanDistribution: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [honeyPrice, setHoneyPrice] = useState<number>(0);
   const [analytics, setAnalytics] = useState<DistributionAnalytics | null>(null);
+  const [distributionDetails, setDistributionDetails] = useState<{
+    interestForPeriod: number;
+    userOwnedFraction: number;
+    interestToDistribute: number;
+  } | null>(null);
   const [timeFilter, setTimeFilter] = useState<number>(1); // Default to 1 month
 
   const timeFilters: TimeFilter[] = [
@@ -69,14 +90,37 @@ export const LoanDistribution: React.FC = () => {
       try {
         setLoading(true);
         
-        // Fetch debt assets
-        const { data: assetsData, error: assetsError } = await adminSupabase
-          .from('assets')
-          .select('id, name, symbol, type')
-          .eq('type', 'debt');
+        // Fetch debt assets with loan terms
+        const { data, error: assetsError } = await adminSupabase
+          .from('debt_assets')
+          .select(`
+            id,
+            loan_amount,
+            apr,
+            asset_id,
+            assets!debt_assets_asset_id_fkey (
+              name,
+              symbol,
+              type
+            )
+          `)
+          .eq('assets.type', 'debt')
+          .returns<DebtAssetResponse[]>();
 
         if (assetsError) throw assetsError;
-        setAssets(assetsData);
+
+        // Transform the data to match our Asset interface
+        const transformedAssets: Asset[] = data.map(asset => ({
+          id: asset.id,
+          name: asset.assets.name,
+          symbol: asset.assets.symbol,
+          type: asset.assets.type,
+          loan_amount: asset.loan_amount,
+          apr: asset.apr,
+          asset_id: asset.asset_id
+        }));
+
+        setAssets(transformedAssets);
 
         // Fetch current Honey price
         const { data: honeyData, error: honeyError } = await adminSupabase
@@ -133,7 +177,7 @@ export const LoanDistribution: React.FC = () => {
   };
 
   const calculateDistribution = async () => {
-    if (!selectedAsset || !distributionAmount || !periodStart || !periodEnd) {
+    if (!selectedAsset || !periodStart || !periodEnd) {
       setError('Please fill in all fields');
       return;
     }
@@ -142,38 +186,74 @@ export const LoanDistribution: React.FC = () => {
       setCalculating(true);
       setError(null);
 
+      const selectedLoan = assets.find(a => a.id === selectedAsset);
+      if (!selectedLoan) {
+        throw new Error('Selected loan not found');
+      }
+
+      const startDate = new Date(periodStart + 'T00:00:00Z');
+      const endDate = new Date(periodEnd + 'T23:59:59Z');
+      const daysInPeriod = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+      // Calculate interest for period using day-count approach
+      const interestForPeriod = selectedLoan.loan_amount * (selectedLoan.apr / 100) * (daysInPeriod / 365);
+
       console.log('Calculation params:', {
-        asset_id: selectedAsset,
-        start_date: new Date(periodStart + 'T00:00:00Z').toISOString(),
-        end_date: new Date(periodEnd + 'T23:59:59Z').toISOString(),
-        amount: distributionAmount
+        asset_id: selectedLoan.asset_id,
+        start_date: startDate.toISOString(),
+        end_date: endDate.toISOString(),
+        loan_amount: selectedLoan.loan_amount,
+        apr: selectedLoan.apr,
+        days_in_period: daysInPeriod,
+        interest_for_period: interestForPeriod
       });
 
       // Calculate user holdings for the period
       const { data: holdings, error: holdingsError } = await adminSupabase
         .rpc('calculate_user_holdings', {
-          p_asset_id: selectedAsset,
-          p_start_date: new Date(periodStart + 'T00:00:00Z').toISOString(),
-          p_end_date: new Date(periodEnd + 'T23:59:59Z').toISOString()
+          p_asset_id: selectedLoan.asset_id,
+          p_start_date: startDate.toISOString(),
+          p_end_date: endDate.toISOString()
         });
+
+      console.log('Raw holdings response:', holdings);
+      console.log('Holdings error:', holdingsError);
 
       if (holdingsError) {
         console.error('Holdings calculation error:', holdingsError);
         throw holdingsError;
       }
 
-      console.log('Holdings calculated:', holdings);
+      if (!holdings) {
+        console.error('No holdings data returned');
+        setError('No holdings data returned from calculation');
+        return;
+      }
 
-      if (!holdings || holdings.length === 0) {
+      // Check if holdings array exists and has items
+      if (!Array.isArray(holdings) || holdings.length === 0) {
+        console.error('Holdings is not an array or is empty:', holdings);
         setError('No holdings found for the selected period');
         return;
       }
+
+      console.log('Valid holdings found:', holdings);
+
+      // Calculate user owned fraction and interest to distribute
+      const totalDollarDays = holdings.reduce((sum: number, h: Holding) => sum + Number(h.total_dollar_days), 0);
+      const userOwnedFraction = totalDollarDays / (selectedLoan.loan_amount * daysInPeriod);
+      const interestToDistribute = interestForPeriod * userOwnedFraction;
+
+      setDistributionDetails({
+        interestForPeriod,
+        userOwnedFraction,
+        interestToDistribute
+      });
 
       // Get user emails
       const userIds = holdings.map((h: Holding) => h.user_id);
       console.log('Fetching emails for users:', userIds);
 
-      // Using raw query to access auth.users table
       const { data: users, error: usersError } = await adminSupabase
         .rpc('get_user_emails', {
           p_user_ids: userIds
@@ -186,22 +266,9 @@ export const LoanDistribution: React.FC = () => {
 
       console.log('Users fetched:', users);
 
-      // Calculate distribution amounts
-      const totalDays = holdings.reduce((sum: number, h: Holding) => sum + h.days_held, 0);
-      const totalBalance = holdings.reduce((sum: number, h: Holding) => sum + h.average_balance, 0);
-      const distributionAmountNum = parseFloat(distributionAmount);
-
-      console.log('Distribution totals:', {
-        totalDays,
-        totalBalance,
-        distributionAmount: distributionAmountNum,
-        honeyPrice
-      });
-
       const holdingsWithAmounts = holdings.map((holding: Holding) => {
         const user = users?.find((u: User) => u.id === holding.user_id);
-        const weight = (holding.average_balance * holding.days_held) / (totalBalance * totalDays);
-        const usdAmount = distributionAmountNum * weight;
+        const usdAmount = Number((interestToDistribute * holding.share_of_distribution).toFixed(2));
         const honeyAmount = usdAmount / honeyPrice;
 
         return {
@@ -240,14 +307,19 @@ export const LoanDistribution: React.FC = () => {
       setLoading(true);
       setError(null);
 
+      const selectedLoan = assets.find(a => a.id === selectedAsset);
+      if (!selectedLoan) {
+        throw new Error('Selected loan not found');
+      }
+
       // Create distribution record
       const { data: distribution, error: distributionError } = await adminSupabase
         .from('loan_distributions')
         .insert({
-          asset_id: selectedAsset,
+          asset_id: selectedLoan.asset_id,
           distribution_period_start: periodStart,
           distribution_period_end: periodEnd,
-          total_distribution_amount: parseFloat(distributionAmount),
+          total_distribution_amount: distributionDetails?.interestToDistribute,
           honey_price_at_distribution: honeyPrice,
           distributed_by: (await adminSupabase.auth.getUser()).data.user?.id
         })
@@ -260,7 +332,7 @@ export const LoanDistribution: React.FC = () => {
       const payments = userHoldings.map(holding => ({
         distribution_id: distribution.id,
         user_id: holding.user_id,
-        asset_id: selectedAsset,
+        asset_id: selectedLoan.asset_id,
         user_balance_during_period: holding.average_balance,
         days_held_in_period: holding.days_held,
         usd_amount: holding.calculated_usd_amount,
@@ -283,10 +355,10 @@ export const LoanDistribution: React.FC = () => {
 
       // Clear form and refresh data
       setSelectedAsset('');
-      setDistributionAmount('');
       setPeriodStart('');
       setPeriodEnd('');
       setUserHoldings([]);
+      setDistributionDetails(null);
       await fetchAnalytics(timeFilter);
 
     } catch (err) {
@@ -383,24 +455,10 @@ export const LoanDistribution: React.FC = () => {
               <option value="">Select an asset</option>
               {assets.map(asset => (
                 <option key={asset.id} value={asset.id}>
-                  {asset.name} ({asset.symbol})
+                  {asset.name} ({asset.symbol}) - {asset.apr}% APR
                 </option>
               ))}
             </select>
-          </div>
-
-          <div>
-            <label className="block text-light/60 mb-2">Distribution Amount (USD)</label>
-            <input
-              type="number"
-              value={distributionAmount}
-              onChange={(e) => setDistributionAmount(e.target.value)}
-              className="w-full px-3 py-2 bg-dark-2 border border-dark-3 rounded-lg text-white placeholder-light/40 focus:outline-none focus:border-primary focus:ring-0"
-              placeholder="Enter amount"
-              min="0"
-              step="0.01"
-              style={{ backgroundColor: '#1a1a1a' }}
-            />
           </div>
 
           <div>
@@ -436,7 +494,7 @@ export const LoanDistribution: React.FC = () => {
       </div>
 
       {/* Distribution Preview */}
-      {userHoldings.length > 0 && (
+      {userHoldings.length > 0 && distributionDetails && (
         <div className="bg-dark-2 rounded-lg p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-semibold text-light">Distribution Preview</h2>
@@ -449,6 +507,29 @@ export const LoanDistribution: React.FC = () => {
             </button>
           </div>
 
+          {/* Distribution Summary */}
+          <div className="grid grid-cols-3 gap-6 mb-6">
+            <div className="bg-dark-3 rounded-lg p-4">
+              <h3 className="text-light/60 mb-2">Interest for Period</h3>
+              <p className="text-xl font-semibold text-light">
+                {formatCurrency(distributionDetails.interestForPeriod)}
+              </p>
+            </div>
+            <div className="bg-dark-3 rounded-lg p-4">
+              <h3 className="text-light/60 mb-2">User Owned Fraction</h3>
+              <p className="text-xl font-semibold text-light">
+                {(distributionDetails.userOwnedFraction * 100).toFixed(2)}%
+              </p>
+            </div>
+            <div className="bg-dark-3 rounded-lg p-4">
+              <h3 className="text-light/60 mb-2">Interest to Distribute</h3>
+              <p className="text-xl font-semibold text-light">
+                {formatCurrency(distributionDetails.interestToDistribute)}
+              </p>
+            </div>
+          </div>
+
+          {/* User Holdings Table */}
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -465,7 +546,7 @@ export const LoanDistribution: React.FC = () => {
                   <tr key={holding.user_id}>
                     <td className="py-4 text-light">{holding.user_email}</td>
                     <td className="py-4 text-right text-light">
-                      {holding.average_balance.toFixed(4)}
+                      {formatCurrency(holding.average_balance)}
                     </td>
                     <td className="py-4 text-right text-light">
                       {holding.days_held}
