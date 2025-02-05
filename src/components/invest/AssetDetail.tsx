@@ -4,12 +4,13 @@ import { Tab } from '@headlessui/react';
 import { ImageGallery } from '../common/ImageGallery';
 import { InvestmentBox } from './InvestmentBox';
 import { HoneyInvestmentBox } from './HoneyInvestmentBox';
-import { Asset, DebtAsset } from '../../lib/types/asset';
+import { Asset, DebtAsset, CommodityAsset } from '../../lib/types/asset';
 import { assetService } from '../../lib/services/assetService';
 import { transactionService } from '../../lib/services/transactionService';
 import { useAuth } from '../../lib/context/AuthContext';
 import { LoadingSpinner } from '../common/LoadingSpinner';
 import { SellWidget } from './SellWidget';
+import { CommodityInvestmentBox } from './CommodityInvestmentBox';
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ');
@@ -200,33 +201,32 @@ export const AssetDetail: React.FC = () => {
         {/* Investment Box */}
         <div className="w-96">
           {asset.type === 'debt' ? (
-            <>
-              <InvestmentBox
-                asset={asset as DebtAsset}
-                userBalance={userBalance}
-                onInvest={() => {}}
-                onSell={() => setShowSellWidget(true)}
-              />
-              {showSellWidget && (
-                <div className="fixed inset-0 bg-dark/80 backdrop-blur-sm flex items-center justify-center z-50">
-                  <SellWidget
-                    asset={asset}
-                    onClose={() => setShowSellWidget(false)}
-                    userBalance={userBalance}
-                  />
-                </div>
-              )}
-            </>
-          ) : asset.type === 'commodity' && asset.symbol === 'HONEY' ? (
-            <HoneyInvestmentBox
-              asset={asset}
+            <InvestmentBox
+              asset={asset as DebtAsset}
               userBalance={userBalance}
               onInvest={() => {}}
-              onSell={() => {}}
+              onSell={() => setShowSellWidget(true)}
+            />
+          ) : asset.type === 'commodity' ? (
+            <CommodityInvestmentBox
+              asset={asset as CommodityAsset}
+              userBalance={userBalance}
+              onInvest={() => {}}
+              onSell={() => setShowSellWidget(true)}
             />
           ) : (
             <div className="text-light/60">
               Debug: Asset type={asset.type}, symbol={asset.symbol}
+            </div>
+          )}
+
+          {showSellWidget && (
+            <div className="fixed inset-0 bg-dark/80 backdrop-blur-sm flex items-center justify-center z-50">
+              <SellWidget
+                asset={asset}
+                onClose={() => setShowSellWidget(false)}
+                userBalance={userBalance}
+              />
             </div>
           )}
         </div>

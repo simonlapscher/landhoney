@@ -36,7 +36,8 @@ export const assetService = {
           timestamp
         )
       `)
-      .neq('symbol', 'HONEYX')
+      .not('symbol', 'eq', 'HONEYX')
+      .not('symbol', 'eq', 'BTCX')
       .order('type', { ascending: true })
       .order('created_at', { ascending: false });
 
@@ -147,7 +148,8 @@ export const assetService = {
         )
       `)
       .eq('id', id)
-      .neq('symbol', 'HONEYX')
+      .not('symbol', 'eq', 'HONEYX')
+      .not('symbol', 'eq', 'BTCX')
       .single();
 
     if (error) {

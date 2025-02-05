@@ -11,6 +11,8 @@ import { Transaction as BaseTransaction } from '../../lib/types/transaction';
 import { PortfolioAsset } from '../../types/portfolio';
 import { HoneyStakingModal } from './HoneyStakingModal';
 import { HoneyUnstakingModal } from './HoneyUnstakingModal';
+import { BitcoinStakingModal } from './BitcoinStakingModal';
+import { BitcoinUnstakingModal } from './BitcoinUnstakingModal';
 
 interface RawAssetResponse extends BaseAsset {
   debt_assets?: {
@@ -69,6 +71,11 @@ interface StakingInfo {
   stakingPercentage: number;
 }
 
+interface BitcoinStakingInfo {
+  btcXBalance: number;
+  stakingPercentage: number;
+}
+
 const isDebtAsset = (asset: ExtendedAsset): asset is ExtendedAsset & { type: 'debt' } => {
   return asset.type === 'debt';
 };
@@ -88,6 +95,11 @@ export const Portfolio: React.FC = () => {
   const [selectedHoneyAsset, setSelectedHoneyAsset] = useState<PortfolioBalance | null>(null);
   const [showUnstakingModal, setShowUnstakingModal] = useState(false);
   const [returns30D, setReturns30D] = useState<number>(0);
+  const [showBitcoinStakingModal, setShowBitcoinStakingModal] = useState(false);
+  const [showBitcoinUnstakingModal, setShowBitcoinUnstakingModal] = useState(false);
+  const [btcBalance, setBtcBalance] = useState<number>(0);
+  const [btcAsset, setBtcAsset] = useState<ExtendedAsset | null>(null);
+  const [btcStakingInfo, setBtcStakingInfo] = useState<BitcoinStakingInfo | null>(null);
 
   // Check if we're in the admin portal context
   const isAdminPortal = window.location.pathname.startsWith('/admin') || (
@@ -150,11 +162,15 @@ export const Portfolio: React.FC = () => {
         throw new Error('User profile not found');
       }
 
-      const [transactionsData, balancesData, stakingData] = await Promise.all([
+      const [transactionsData, balancesData, stakingData, btcData] = await Promise.all([
         transactionService.getUserTransactions(profile.user_id) as Promise<TransactionWithAsset[]>,
         transactionService.getUserBalances(profile.user_id),
         transactionService.getHoneyStakingInfo(profile.user_id).catch(err => {
           console.warn('Failed to fetch staking info:', err);
+          return null;
+        }),
+        transactionService.getBitcoinStakingInfo(profile.user_id).catch(err => {
+          console.warn('Failed to fetch Bitcoin staking info:', err);
           return null;
         })
       ]);
@@ -175,6 +191,7 @@ export const Portfolio: React.FC = () => {
 
       console.log('Raw balances data:', balancesData);
       console.log('Staking info:', stakingData);
+      console.log('Bitcoin staking info:', btcData);
 
       if (transactionsData && balancesData) {
         const mappedTransactions = transactionsData.map(t => ({
@@ -226,6 +243,13 @@ export const Portfolio: React.FC = () => {
         setTransactions(mappedTransactions);
         setBalances(mappedBalances);
         setStakingInfo(stakingData);
+        setBtcStakingInfo(btcData);
+        
+        // Find BTC data from balances
+        const btcBalanceData = balancesData.find(b => b.asset.symbol === 'BTC');
+        setBtcBalance(btcBalanceData?.balance || 0);
+        // Use the BTC asset from balances data instead of staking data
+        setBtcAsset(btcBalanceData?.asset || null);
       }
     } catch (err) {
       console.error('Error fetching portfolio data:', err);
@@ -691,6 +715,31 @@ export const Portfolio: React.FC = () => {
                               )}
                             </div>
                           )}
+                          {balance.asset.symbol === 'BTC' && (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  console.log('Bitcoin modal props:', {
+                                    balance: btcBalance,
+                                    xBalance: btcStakingInfo?.btcXBalance,
+                                    pricePerToken: btcAsset?.price_per_token
+                                  });
+                                  setShowBitcoinStakingModal(true);
+                                }}
+                                className="whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium bg-[#F7931A] hover:bg-[#F7931A]/90"
+                              >
+                                Stake
+                              </button>
+                              {btcStakingInfo && btcStakingInfo.btcXBalance > 0 && (
+                                <button
+                                  onClick={() => setShowBitcoinUnstakingModal(true)}
+                                  className="whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
+                                >
+                                  Unstake
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -765,6 +814,34 @@ export const Portfolio: React.FC = () => {
             />
           </>
         )}
+
+        {/* Add Bitcoin Modals */}
+        <BitcoinStakingModal
+          isOpen={showBitcoinStakingModal}
+          onClose={() => setShowBitcoinStakingModal(false)}
+          bitcoinBalance={btcBalance}
+          bitcoinXBalance={btcStakingInfo?.btcXBalance || 0}
+          stakingPercentage={btcStakingInfo?.stakingPercentage || 0}
+          pricePerToken={btcAsset?.price_per_token || 0}
+          userId={user?.id || ''}
+          onSuccess={() => {
+            setShowBitcoinStakingModal(false);
+            fetchPortfolioData(true);
+          }}
+        />
+        <BitcoinUnstakingModal
+          isOpen={showBitcoinUnstakingModal}
+          onClose={() => setShowBitcoinUnstakingModal(false)}
+          bitcoinBalance={btcBalance}
+          bitcoinXBalance={btcStakingInfo?.btcXBalance || 0}
+          stakingPercentage={btcStakingInfo?.stakingPercentage || 0}
+          pricePerToken={btcAsset?.price_per_token || 0}
+          userId={user?.id || ''}
+          onSuccess={() => {
+            setShowBitcoinUnstakingModal(false);
+            fetchPortfolioData(true);
+          }}
+        />
       </div>
     </div>
   );

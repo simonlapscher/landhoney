@@ -87,6 +87,10 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose, userBala
     setWidgetState('input');
   };
 
+  const formatAmount = (amount: number, type: 'token' | 'usd') => {
+    return type === 'token' ? amount.toFixed(4) : amount.toFixed(2);
+  };
+
   if (widgetState === 'confirmation') {
     return (
       <div className="max-w-lg mx-auto bg-dark/95 p-6 rounded-2xl shadow-xl border border-light/10">
@@ -101,7 +105,7 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose, userBala
         <div className="mb-6">
           <div className="bg-light/5 p-4 rounded-lg mb-4">
             <h3 className="text-lg font-bold text-light mb-4">
-              Order Summary - Sell {tokenAmount.toFixed(2)} {asset.symbol}
+              Order Summary - Sell {formatAmount(tokenAmount, 'token')} {asset.symbol}
             </h3>
             <div className="space-y-2">
               <div className="flex justify-between">
@@ -110,20 +114,20 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose, userBala
               </div>
               <div className="flex justify-between">
                 <span className="text-light/60">Price per token</span>
-                <span className="text-light">${asset.price_per_token.toFixed(2)}</span>
+                <span className="text-light">${formatAmount(asset.price_per_token, 'usd')}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-light/60">Net sale</span>
-                <span className="text-light">${usdAmount.toFixed(2)}</span>
+                <span className="text-light">${formatAmount(usdAmount, 'usd')}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-light/60">Fee (0.5%)</span>
-                <span className="text-light">${platformFee.toFixed(2)}</span>
+                <span className="text-light">${formatAmount(platformFee, 'usd')}</span>
               </div>
               <div className="border-t border-light/10 my-2" />
               <div className="flex justify-between font-bold">
                 <span className="text-light">Total to Receive</span>
-                <span className="text-light">${totalAmount.toFixed(2)}</span>
+                <span className="text-light">${formatAmount(totalAmount, 'usd')}</span>
               </div>
             </div>
           </div>
@@ -176,7 +180,7 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose, userBala
                 <h3 className="text-lg font-bold text-light">You're Selling</h3>
                 <div className="flex items-center">
                   <span className="text-light/60 text-sm">Your balance:</span>
-                  <p className="text-light text-sm ml-2">{userBalance.toFixed(2)} {asset.symbol}</p>
+                  <p className="text-light text-sm ml-2">{formatAmount(userBalance, 'token')} {asset.symbol}</p>
                 </div>
               </div>
               
@@ -241,7 +245,7 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose, userBala
 
               {/* Price per token */}
               <div className="mt-2 text-sm text-light/60">
-                Price per token: ${asset.price_per_token.toLocaleString()}
+                Price per token: ${formatAmount(asset.price_per_token, 'usd')}
               </div>
             </div>
 
@@ -252,30 +256,30 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose, userBala
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-light/60">Selling</span>
-                    <span className="text-light">{tokenAmount.toFixed(2)} {asset.symbol}</span>
+                    <span className="text-light">{formatAmount(tokenAmount, 'token')} {asset.symbol}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-light/60">Price per token</span>
-                    <span className="text-light">${asset.price_per_token.toFixed(2)}</span>
+                    <span className="text-light">${formatAmount(asset.price_per_token, 'usd')}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-light/60">Net sale</span>
-                    <span className="text-light">${usdAmount.toFixed(2)}</span>
+                    <span className="text-light">${formatAmount(usdAmount, 'usd')}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-light/60">Fee (0.5%)</span>
-                    <span className="text-light">${platformFee.toFixed(2)}</span>
+                    <span className="text-light">${formatAmount(platformFee, 'usd')}</span>
                   </div>
                   <div className="border-t border-light/10 my-2" />
                   <div className="flex justify-between font-bold">
                     <span className="text-light">Total to Receive</span>
-                    <span className="text-light">${totalAmount.toFixed(2)}</span>
+                    <span className="text-light">${formatAmount(totalAmount, 'usd')}</span>
                   </div>
                 </div>
               ) : (
                 <div className="flex items-center justify-between">
                   <span className="text-light">{paymentMethod}</span>
-                  <span className="text-light">${totalAmount.toFixed(2)}</span>
+                  <span className="text-light">${formatAmount(totalAmount, 'usd')}</span>
                 </div>
               )}
             </div>
@@ -323,7 +327,7 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose, userBala
                     <InformationCircleIcon className="w-4 h-4 text-light/60 cursor-help" />
                   </Tooltip>
                   <span>=</span>
-                  <span>${platformFee.toFixed(2)}</span>
+                  <span>${formatAmount(platformFee, 'usd')}</span>
                 </div>
               </div>
             </div>

@@ -552,5 +552,195 @@ export const transactionService = {
         error instanceof Error ? error.message : 'Unknown error'
       );
     }
+  },
+
+  async stakeBitcoin(userId: string, amount: number): Promise<Transaction> {
+    try {
+      // Get the BTC asset
+      const { data: btcAsset, error: btcError } = await supabase
+        .from('assets')
+        .select('*')
+        .eq('symbol', 'BTC')
+        .single();
+
+      if (btcError || !btcAsset) {
+        throw new TransactionError(
+          'Failed to fetch BTC asset',
+          'ASSET_ERROR',
+          btcError?.message
+        );
+      }
+
+      // Get the BTCX asset
+      const { data: btcxAsset, error: btcxError } = await supabase
+        .from('assets')
+        .select('*')
+        .eq('symbol', 'BTCX')
+        .single();
+
+      if (btcxError || !btcxAsset) {
+        throw new TransactionError(
+          'Failed to fetch BTCX asset',
+          'ASSET_ERROR',
+          btcxError?.message
+        );
+      }
+
+      const { data: transaction, error: transactionError } = await supabase.rpc(
+        'stake_bitcoin',
+        {
+          p_user_id: userId,
+          p_amount: amount,
+          p_btc_asset_id: btcAsset.id,
+          p_btcx_asset_id: btcxAsset.id,
+          p_price_per_token: btcAsset.price_per_token
+        }
+      );
+
+      if (transactionError) throw transactionError;
+      return transaction;
+    } catch (error) {
+      console.error('Error in stakeBitcoin:', error);
+      if (error instanceof TransactionError) throw error;
+      throw new TransactionError(
+        'Failed to stake Bitcoin',
+        'UNKNOWN_ERROR',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+    }
+  },
+
+  async unstakeBitcoin(userId: string, amount: number): Promise<Transaction> {
+    try {
+      // Get the BTC asset
+      const { data: btcAsset, error: btcError } = await supabase
+        .from('assets')
+        .select('*')
+        .eq('symbol', 'BTC')
+        .single();
+
+      if (btcError || !btcAsset) {
+        throw new TransactionError(
+          'Failed to fetch BTC asset',
+          'ASSET_ERROR',
+          btcError?.message
+        );
+      }
+
+      // Get the BTCX asset
+      const { data: btcxAsset, error: btcxError } = await supabase
+        .from('assets')
+        .select('*')
+        .eq('symbol', 'BTCX')
+        .single();
+
+      if (btcxError || !btcxAsset) {
+        throw new TransactionError(
+          'Failed to fetch BTCX asset',
+          'ASSET_ERROR',
+          btcxError?.message
+        );
+      }
+
+      const { data: transaction, error: transactionError } = await supabase.rpc(
+        'unstake_bitcoin',
+        {
+          p_user_id: userId,
+          p_amount: amount,
+          p_btc_asset_id: btcAsset.id,
+          p_btcx_asset_id: btcxAsset.id,
+          p_price_per_token: btcAsset.price_per_token
+        }
+      );
+
+      if (transactionError) throw transactionError;
+      return transaction;
+    } catch (error) {
+      console.error('Error in unstakeBitcoin:', error);
+      if (error instanceof TransactionError) throw error;
+      throw new TransactionError(
+        'Failed to unstake Bitcoin',
+        'UNKNOWN_ERROR',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+    }
+  },
+
+  async getBitcoinStakingInfo(userId: string): Promise<{ 
+    bitcoinBalance: number, 
+    bitcoinXBalance: number, 
+    stakingPercentage: number 
+  }> {
+    try {
+      console.log('Fetching Bitcoin staking info for user:', userId);
+
+      interface AssetBalance {
+        balance: number;
+        asset: {
+          symbol: string;
+        };
+      }
+
+      const { data: balances, error: balancesError } = await supabase
+        .from('user_balances')
+        .select(`
+          balance,
+          asset:assets (
+            symbol
+          )
+        `)
+        .eq('user_id', userId)
+        .in('asset.symbol', ['BTC', 'BTCX']) as { 
+          data: AssetBalance[] | null, 
+          error: any 
+        };
+
+      if (balancesError) {
+        console.error('Error fetching Bitcoin balances:', balancesError);
+        throw new TransactionError(
+          'Failed to fetch Bitcoin balances',
+          'BALANCE_ERROR',
+          balancesError.message
+        );
+      }
+
+      // If no balances found, return zero values
+      if (!balances || balances.length === 0) {
+        console.log('No Bitcoin balances found for user:', userId);
+        return {
+          bitcoinBalance: 0,
+          bitcoinXBalance: 0,
+          stakingPercentage: 0
+        };
+      }
+
+      const bitcoinBalance = balances.find(b => b?.asset?.symbol === 'BTC')?.balance || 0;
+      const bitcoinXBalance = balances.find(b => b?.asset?.symbol === 'BTCX')?.balance || 0;
+      const stakingPercentage = bitcoinXBalance > 0 
+        ? (bitcoinXBalance / (bitcoinBalance + bitcoinXBalance)) * 100 
+        : 0;
+
+      console.log('Found Bitcoin balances:', {
+        bitcoinBalance,
+        bitcoinXBalance,
+        stakingPercentage
+      });
+
+      return {
+        bitcoinBalance: Number(bitcoinBalance),
+        bitcoinXBalance: Number(bitcoinXBalance),
+        stakingPercentage
+      };
+    } catch (error) {
+      console.error('Error in getBitcoinStakingInfo:', error);
+      if (error instanceof TransactionError) {
+        throw error;
+      }
+      throw new TransactionError(
+        'Failed to fetch Bitcoin staking info',
+        'UNKNOWN_ERROR',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+    }
   }
 }; 

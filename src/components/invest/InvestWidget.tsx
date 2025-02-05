@@ -201,6 +201,11 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
 
   const navigate = useNavigate();
 
+  // Add this helper function at the top of the file
+  const formatAmount = (amount: number, type: 'token' | 'usd') => {
+    return type === 'token' ? amount.toFixed(4) : amount.toFixed(2);
+  };
+
   if (widgetState === 'payment_instructions') {
     return (
       <div className="max-w-md mx-auto bg-dark/95 p-6 rounded-2xl shadow-xl border border-light/10">
@@ -210,11 +215,11 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
         <div className="mb-6">
           <div className="bg-light/5 p-4 rounded-lg mb-4">
             <h3 className="text-lg font-bold text-light mb-3">
-              Order Summary - Buy {tokenAmount.toFixed(2)} {asset.symbol}
+              Order Summary - Buy {formatAmount(tokenAmount, 'token')} {asset.symbol}
             </h3>
             <div className="flex items-center justify-between">
               <span className="font-bold text-light">Total to Pay</span>
-              <span className="font-bold text-light">${totalAmount.toFixed(2)}</span>
+              <span className="font-bold text-light">${formatAmount(totalAmount, 'usd')}</span>
             </div>
           </div>
           {renderPaymentInstructions()}
@@ -252,7 +257,7 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
         <div className="mb-6">
           <div className="bg-light/5 p-4 rounded-lg mb-4">
             <h3 className="text-lg font-bold text-light mb-4">
-              Order Summary - Buy {tokenAmount.toFixed(2)} {asset.symbol}
+              Order Summary - Buy {formatAmount(tokenAmount, 'token')} {asset.symbol}
             </h3>
             <div className="space-y-2">
               <div className="flex justify-between">
@@ -261,20 +266,20 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
               </div>
               <div className="flex justify-between">
                 <span className="text-light/60">Price per token</span>
-                <span className="text-light">${asset.price_per_token.toFixed(2)}</span>
+                <span className="text-light">${formatAmount(asset.price_per_token, 'usd')}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-light/60">Net investment</span>
-                <span className="text-light">${usdAmount.toFixed(2)}</span>
+                <span className="text-light">${formatAmount(usdAmount, 'usd')}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-light/60">Fee (0.5%)</span>
-                <span className="text-light">${platformFee.toFixed(2)}</span>
+                <span className="text-light">${formatAmount(platformFee, 'usd')}</span>
               </div>
               <div className="border-t border-light/10 my-2" />
               <div className="flex justify-between font-bold">
                 <span className="text-light">Total to Pay</span>
-                <span className="text-light">${totalAmount.toFixed(2)}</span>
+                <span className="text-light">${formatAmount(totalAmount, 'usd')}</span>
               </div>
             </div>
           </div>
@@ -321,7 +326,7 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
             <h3 className="text-lg font-bold text-light">You're Buying</h3>
             <div className="flex items-center">
               <span className="text-light/60 text-sm">Your balance:</span>
-              <p className="text-light text-sm ml-2">{userBalance.toFixed(2)} {asset.symbol}</p>
+              <p className="text-light text-sm ml-2">{formatAmount(userBalance, 'token')} {asset.symbol}</p>
             </div>
           </div>
           
@@ -386,7 +391,7 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
 
           {/* Price per token */}
           <div className="mt-2 text-sm text-light/60">
-            Price per token: ${asset.price_per_token.toLocaleString()}
+            Price per token: ${formatAmount(asset.price_per_token, 'usd')}
           </div>
         </div>
 
@@ -411,7 +416,7 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
         <div className="bg-light/5 p-4 rounded-xl">
           <h3 className="text-lg font-bold text-light mb-4">You Receive</h3>
           <div className="flex items-center">
-            <span className="text-light">{tokenAmount.toFixed(2)} {asset.symbol}</span>
+            <span className="text-light">{formatAmount(tokenAmount, 'token')} {asset.symbol}</span>
           </div>
         </div>
 
@@ -457,7 +462,7 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
               <Tooltip content="Platform fee">
                 <InformationCircleIcon className="w-4 h-4" />
               </Tooltip>
-              <span>= ${platformFee.toFixed(2)}</span>
+              <span>= ${formatAmount(platformFee, 'usd')}</span>
             </div>
             {asset.type === 'debt' && (
               <div>Min ${asset.min_investment.toLocaleString()} - Max ${asset.max_investment.toLocaleString()}</div>

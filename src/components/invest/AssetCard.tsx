@@ -22,7 +22,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset }) => {
 
   useEffect(() => {
     const fetchFundingStats = async () => {
-      if (isDebtAsset(asset)) {
+      if (asset.type === 'debt') {
         const { data, error } = await supabase
           .from('asset_funding_stats')
           .select('*')
@@ -39,7 +39,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset }) => {
     };
 
     fetchFundingStats();
-  }, [asset.id]);
+  }, [asset.id, asset.type]);
 
   const handleCardClick = () => {
     navigate(`/app/invest/${asset.id}`);
@@ -50,96 +50,105 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset }) => {
     navigate(`/app/invest/${asset.id}`);
   };
 
-  const isDebtAsset = (asset: Asset): asset is DebtAsset => {
-    return asset.type === 'debt';
-  };
-
-  const isCommodityAsset = (asset: Asset): asset is CommodityAsset => {
-    return asset.type === 'commodity';
-  };
-
-  const getLatestPrice = (asset: CommodityAsset) => {
-    if (!asset.asset_prices?.length) return null;
-    return asset.asset_prices.sort((a, b) => 
-      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    )[0].price;
+  const getAssetConfig = (asset: CommodityAsset) => {
+    if (asset.symbol === 'BTC') {
+      return {
+        color: '#F7931A',
+        description: 'Decentralized peer-to-peer money'
+      };
+    }
+    if (asset.symbol === 'HONEY') {
+      return {
+        color: '#FFD700',
+        description: 'Gold-backed token'
+      };
+    }
+    return {
+      color: '#00D54B',
+      description: asset.description || ''
+    };
   };
 
   return (
     <div 
-      className="bg-secondary rounded-lg overflow-hidden cursor-pointer hover:bg-secondary/80 transition-colors flex flex-col h-full"
       onClick={handleCardClick}
+      className="bg-secondary rounded-lg overflow-hidden cursor-pointer hover:bg-secondary/80 transition-colors"
     >
-      <div className="relative pt-[56.25%]">
+      {/* Card Header */}
+      <div className="relative h-48 bg-dark">
         <img
           src={asset.main_image}
           alt={asset.name}
-          className="absolute top-0 left-0 w-full h-full object-cover"
+          className="w-full h-full object-cover"
         />
       </div>
-      <div className="p-6 flex-1 flex flex-col">
-        {isDebtAsset(asset) ? (
-          <>
-            <h3 className="text-xl text-light mb-4 text-center">{asset.location}</h3>
-            <div className="grid grid-cols-3 gap-4 mb-6">
+
+      {/* Card Content */}
+      <div className="p-6">
+        {asset.type === 'debt' ? (
+          <div className="flex flex-col h-[240px] justify-between">
+            <div className="text-center">
+              <h3 className="text-xl text-light">{(asset as DebtAsset).location}</h3>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
               <div className="text-center">
-                <p className="text-2xl text-light font-medium">{asset.apr}%</p>
+                <p className="text-2xl text-light font-medium">{(asset as DebtAsset).apr}%</p>
                 <p className="text-sm text-light/60">APR</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl text-light font-medium">{asset.ltv}%</p>
+                <p className="text-2xl text-light font-medium">{(asset as DebtAsset).ltv}%</p>
                 <p className="text-sm text-light/60">LTV</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl text-light font-medium">{asset.term_months} Mo.</p>
+                <p className="text-2xl text-light font-medium">{(asset as DebtAsset).term_months} Mo.</p>
                 <p className="text-sm text-light/60">Term</p>
               </div>
             </div>
-            <div className="flex-1 flex flex-col">
-              <div className="space-y-2 mb-6">
-                <div className="w-full bg-dark rounded-full h-2">
-                  <div
-                    className="bg-[#42DB98] h-2 rounded-full transition-all duration-500"
-                    style={{
-                      width: `${fundingStats ? fundingStats.percent_funded : 0}%`,
-                    }}
-                  />
-                </div>
-                <div className="flex justify-end text-sm">
-                  <span className="text-light/60">
-                    ${fundingStats ? Math.round(fundingStats.remaining_amount).toLocaleString() : Math.round((asset as DebtAsset).loan_amount).toLocaleString()} remaining
-                  </span>
-                </div>
+
+            <div className="space-y-2">
+              <div className="h-2 bg-[#1A1A1A] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[#00D54B] rounded-full"
+                  style={{
+                    width: `${fundingStats ? fundingStats.percent_funded : 0}%`,
+                  }}
+                />
               </div>
-              <button 
-                onClick={handleInvestClick}
-                className="w-full bg-[#00D54B] text-dark font-medium py-3 px-6 rounded-lg hover:bg-[#00D54B]/90 transition-colors mt-auto"
-              >
-                Invest
-              </button>
+              <div className="flex justify-end text-sm">
+                <span className="text-light/60">
+                  ${fundingStats ? Math.round(fundingStats.remaining_amount).toLocaleString() : Math.round((asset as DebtAsset).loan_amount).toLocaleString()} remaining
+                </span>
+              </div>
             </div>
-          </>
-        ) : isCommodityAsset(asset) ? (
+
+            <button 
+              onClick={handleInvestClick}
+              className="w-full bg-[#00D54B] text-dark font-medium py-3 px-6 rounded-lg hover:bg-[#00D54B]/90 transition-colors"
+            >
+              Invest
+            </button>
+          </div>
+        ) : asset.type === 'commodity' ? (
           <div className="flex flex-col justify-between h-full">
             <div className="mb-8">
               <h3 className="text-xl text-light mb-2">{asset.name}</h3>
-              <p className="text-light/60">{asset.description}</p>
+              <p className="text-light/60">{getAssetConfig(asset as CommodityAsset).description}</p>
             </div>
             <div className="mb-8">
               <div className="flex items-baseline gap-2">
                 <p className="text-2xl text-light font-medium">
                   ${asset.price_per_token.toLocaleString()}
                 </p>
-                {asset.symbol === 'HONEY' && (
-                  <p className="text-sm text-light/60">per Honey = 1oz gold</p>
-                )}
+                <p className="text-sm text-light/60">per {asset.symbol}</p>
               </div>
             </div>
             <button 
               onClick={handleInvestClick}
-              className="w-full bg-[#00D54B] text-dark font-medium py-3 px-6 rounded-lg hover:bg-[#00D54B]/90 transition-colors"
+              style={{ backgroundColor: getAssetConfig(asset as CommodityAsset).color }}
+              className="w-full text-dark font-medium py-3 px-6 rounded-lg hover:opacity-90 transition-colors"
             >
-              Invest
+              Buy
             </button>
           </div>
         ) : null}
