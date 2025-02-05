@@ -87,6 +87,7 @@ export const Portfolio: React.FC = () => {
   const [showStakingModal, setShowStakingModal] = useState(false);
   const [selectedHoneyAsset, setSelectedHoneyAsset] = useState<PortfolioBalance | null>(null);
   const [showUnstakingModal, setShowUnstakingModal] = useState(false);
+  const [returns30D, setReturns30D] = useState<number>(0);
 
   // Check if we're in the admin portal context
   const isAdminPortal = window.location.pathname.startsWith('/admin') || (
@@ -157,6 +158,20 @@ export const Portfolio: React.FC = () => {
           return null;
         })
       ]);
+
+      // Calculate 30-day returns from completed loan distribution transactions
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const returns = transactionsData
+        .filter(t => 
+          t.type === 'loan_distribution' && 
+          t.status === 'completed' &&
+          new Date(t.created_at) >= thirtyDaysAgo
+        )
+        .reduce((sum, t) => sum + (t.metadata?.usd_amount || 0), 0);
+      
+      setReturns30D(returns);
 
       console.log('Raw balances data:', balancesData);
       console.log('Staking info:', stakingData);
@@ -502,11 +517,32 @@ export const Portfolio: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="space-y-8">
-        <div className="space-y-4">
-          <h1 className="text-3xl font-semibold text-light">My Assets</h1>
-          <p className="text-2xl font-medium text-light pl-1">
-            Total Value: {formatCurrency(totalPortfolioValue)}
-          </p>
+        <div>
+          <h1 className="text-3xl font-semibold text-light mb-6">My Assets</h1>
+          <div className="flex items-center">
+            <div className="w-1/2">
+              <div className="text-lg font-medium text-light">Total Value</div>
+              <div className="text-4xl font-bold text-light mt-2">
+                {formatCurrency(totalPortfolioValue)}
+              </div>
+            </div>
+
+            <div className="flex gap-12">
+              <div>
+                <div className="text-lg font-medium text-light">Returns <span className="text-sm text-light/60 ml-1">30D</span></div>
+                <div className="text-2xl font-medium text-[#00D54B] mt-2">
+                  {formatCurrency(returns30D)}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-lg font-medium text-light">Staking Gains</div>
+                <div className="text-2xl font-medium text-[#00D54B] mt-2">
+                  {formatCurrency(135.08)}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Asset Type Filter */}

@@ -1,4 +1,4 @@
-export type TransactionType = 'buy' | 'sell' | 'convert' | 'earn' | 'stake' | 'unstake';
+export type TransactionType = 'buy' | 'sell' | 'convert' | 'earn' | 'stake' | 'unstake' | 'loan_distribution';
 export type TransactionStatus = 'pending' | 'completed' | 'failed' | 'cancelled';
 export type PaymentMethod = 'USD' | 'USDC';
 

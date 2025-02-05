@@ -29,7 +29,7 @@ Future integrations (KYC with Sumsub, on-chain wallets with Privy, Transak on/of
     Can sign up, manage portfolio, invest, buy/sell, add liquidity, etc.
     For MVP, all users have the same permissions.
   3.2 Admin Roles:
-    Not implemented in the MVP. Will come later for advanced management.
+    Can view, approve and reject orders. Can mint new tokens for users. 
 
 4. Features & User Flow
   4.1 Onboarding
@@ -94,12 +94,15 @@ Future integrations (KYC with Sumsub, on-chain wallets with Privy, Transak on/of
             Overview Text describing the asset.
             Documents: Link or PDF stored in Supabase Storage (if any).
             Possibly more disclaimers or information.
-        4.2.3.4 Buy / Sell Flow - If buying:
-            Pop-up (styling like Selling Widget)    with 2 main containers: “You’re Buying” and “You’re Paying With” (or vice versa).
-            Fees section.
-            Review → Confirm button.
-            If Buying with USDC → show Landhoney deposit wallet address.
-            If Buying with USD → show wire/bank instructions.
+        4.2.3.4 Invest / Sell Flow - If buying:
+            Pop-up (styling like Selling Widget)    with 2 main containers: “You’re Buying” and “You’re Paying With” (or vice versa). You're buying is prepopulated based on the asset they are looking at, then they put input amount, can choose by token amount or by dollar amount. 
+            Price per token
+            Net investment 
+            Fees section to show platform fee.
+            Total amount to pay.
+            Enter amount (when adding information) -> Review button (everything locks and not editable but show edit button) → Confirm button.
+            After Confirm, If Buying with USDC → show Landhoney deposit wallet address with QR Code and instructions to pay.
+            After Confirm, If Buying with USD → show wire/bank instructions with instructions to pay.
             If Selling → use the offline “Selling Widget” approach (the same as the separate Sell Widget PRD).
             On Confirm, record a new transaction in the transactions table and send a notification email to the user.
     4.2.4 Liquid Reserve
@@ -118,6 +121,83 @@ Future integrations (KYC with Sumsub, on-chain wallets with Privy, Transak on/of
             Review → Add Liquidity button → final confirmation.
             Creates a transaction in transactions with type “liquidity_add” or similar.
             Notification email to user confirming the liquidity addition.
+    4.2.5 Honey & Staking Honey
+     Overview:
+     Honey is a gold‐pegged commodity asset whose price is updated every 30 minutes via an oracle (e.g., Chainlink or another gold price aggregator). Users can acquire Honey, stake it for yield, and sell it (with admin approval). A special internal token, HoneyX, tracks the staked portion of a user’s Honey balance.
+        4.2.5.1 Price Oracle Integration
+            a. Update Frequency: The Honey price is refreshed every 30 minutes from an external gold price source.
+            b. Provider: A recommended approach is to use Chainlink’s gold spot price feed or a reputable gold price API.
+            c. Display:
+                In the Invest Section when selecting Honey.
+                In the Portfolio Holdings table under “My Assets.”
+                Show the current gold‐pegged price (e.g., “1 Honey = $1,900.00”).
+        4.2.5.2 Acquiring Honey
+            a. Purchase via Invest
+                Users can buy Honey with USD or USDC through the standard Invest flow.
+                After the user sends funds externally (bank wire or crypto transfer), an admin approves the transaction and mints Honey to the user.
+                A “Loan Payment” or “Purchase” transaction is recorded in the user’s history with status = “completed.”
+            b. Monthly Distribution
+                For users holding a loan, admins can mint Honey to them every month as a distribution or payment.
+                Labeled in transaction history as “Loan Payment.”
+                Triggers an email notification informing the user of new Honey minted to their account.
+            c. Staking Rewards
+                Users earn additional Honey via staking yields (detailed below).
+                When rewards are distributed (e.g., monthly), a “Reward” transaction appears in their history.
+        4.2.5.3 Selling Honey
+            a. Sell Request: Users initiate a sell widget request for Honey, specifying USD or USDC as the receiving asset.
+            b. Admin Approval: An admin confirms receipt of payment if needed (or simply confirms the user’s Honey balance).
+            c. Balance Update: Once approved, the user’s Honey balance is reduced and the transaction is recorded (type = “sell,” status = “completed”).
+            d. Same Flow as Other Assets: There is no separate “Sell Honey” pop‐up; it follows the existing offline manual sell widget flow.
+        4.2.5.4 Staking Flow
+            Goal: Users stake Honey into the Liquid Reserve to earn from fees and arbitrage. The yield is labeled as “Estimated APY” and currently set to 8.8%.
+            a. Stake Initiation
+                From the Portfolio / My Assets page, if the user has any non‐staked Honey, a “Stake” button is available.
+                Clicking “Stake” opens a Staking Pop‐up showing:
+                    Staking Amount: User can enter a dollar amount (primary) or Honey amount (secondary).
+                    Estimated APY (8.8%).
+                    Earning Wait Time: 7 days.
+                    Payout Frequency: Every 30 days.
+                    Unstaking Wait Time: 7 days.
+                    Risk Warning: A pop‐up or tooltip explaining staking risks and yield sources.
+            b. HoneyX Representation
+                Upon staking, the user’s Honey balance decreases by the staked amount, and an equivalent quantity of HoneyX is allocated to them behind the scenes.
+                From the user’s perspective: They still see a single combined “Honey” balance in their portfolio, but a portion is visually marked as staked.
+            c. Portfolio Display
+                Honey with a gold ring illustrating the % staked (e.g., “47% staked”).
+                The “Balance” effectively includes (Honey + HoneyX). However:
+                    If the user only has Honey (no staked portion), they see a “Stake” button.
+                    If the user has both Honey and HoneyX, they see “Stake More” (primary) and “Unstake” (secondary).
+                    If the user only has HoneyX (i.e., fully staked), “Stake More” is disabled since they have no free Honey.
+            d. Unstake Flow
+                Clicking “Unstake” opens an Unstake Pop‐up:
+                    Input Amount in USD or Honey.
+                    Available staked portion to unstake.
+                    APY reminder (e.g., “~8.8%”).
+                    Unstake button finalizes.
+                One‐click uns​take, but the user’s HoneyX remains locked for a 7‐day wait period. Only after the wait time concludes does the Honey become available.
+                A “Staked” transaction is recorded when the user stakes, and an “Unstaked” transaction is recorded when the user initiates unstaking.
+                Optionally show “available at X date / time” for transparency.
+            e. Staking Earnings
+                In the Portfolio header (near “Total Value”), show:
+                    A circular gauge with a gold ring filled to the user’s staked %.
+                    Text like “47% staked.”
+                    Staking rewards in USD.
+                Payout from fees or arbitrage is distributed every 30 days, recorded as a “Reward” transaction in the user’s history.
+    4.2.5.5 Transaction & Notification Details
+        Transaction Types:
+            “Loan Payment” for monthly minted Honey from Admin.
+            “Reward” for staking payouts.
+            “Staked”/“Unstaked” for the user’s stake operations.
+            “Sell” for user-initiated sells.
+        Email Triggers - to be implemented later after functionality is done and tested
+            Loan Payment minted → Email user.
+            Staking Reward distribution → Email user.
+            (Future) You may add emails for stake/unstake confirmations once functionality is stable.
+    4.2.5.6 Future Enhancements
+        On-Chain Staking: Eventually, Honey and HoneyX will exist on a blockchain (e.g., Base). Staking transactions may become fully on-chain.
+        Advanced Lock Mechanisms: Slashing, early withdrawal penalties, or variable APY calculations.
+        Complex Oracle Logic: Using fallback or multiple oracle sources if the primary feed fails.
+        Minimum/Maximum Staking: Possible introduction of stake limits or fees at a later stage.
 
 5. Database Schema (Proposed)
 Below are proposed   tables for Supabase. (Adjust naming/fields as needed.)
@@ -236,3 +316,66 @@ Below are proposed   tables for Supabase. (Adjust naming/fields as needed.)
       3. #79E5E4
       4. #42DB98
       5. #F88396
+
+----
+New section for Admin portal:
+
+11. Admin Portal
+11.1 Overview
+The Admin Portal is a restricted-access area for authorized Landhoney administrators. Its purpose is to manage and monitor the platform’s day-to-day operations, including user investments, asset controls, user account management, and compliance oversight. In the MVP, multiple admins can have access to these features.
+
+11.2 Key Features
+11.2.1 Invest Order Management
+ 11.2.1.1 Review Pending Orders: Admins can see all new invest and sell orders across assets awaiting approval.
+ 11.2.1.2 Approve / Reject Orders:
+    * If the payment method is USD or USDC, the admin manually confirms receipt of funds from outside the platform and approves / rejects order. Once approved, the system adds/mints the corresponding asset tokens to the investor’s balance.
+    * If the payment method is Honey, the admin confirms the investor’s Honey balance and approves the transaction. Once the admin approves the transaction, the investor's Honey balance is deducted and system mints the new asset tokens to the investor accordingly.
+ 11.2.1.3 Transaction Recording: Once approved, a transaction record is updated in transactions with status “completed.” and balances are updated in user_balances.
+
+11.2.2 User & KYC Management
+ 11.2.2.1 View User Data: Admins can view a user’s onboarding details (country, phone, SSN/Tax ID) and, once integrated, KYC/AML status.
+ 11.2.2.2 Disable / Pause User Account: Temporarily or permanently restrict a user’s access to the platform. For instance, if there’s suspicion of fraudulent activity or compliance concerns, an admin can suspend the user.
+ 11.2.2.3 User Transaction History: Admins can see a full timeline of each user’s historical transactions (buy, sell, invest, liquidity, etc.) for auditing or support.
+
+11.2.3 Asset Oversight
+ 11.2.3.1 View Investors per Asset: A list of all users holding a particular asset, along with their balances.
+ 11.2.3.2 Pause Asset Trading: Instantly prevent new buy/sell orders for a specific asset (e.g., if an asset is under regulatory review or liquidity constraints).
+
+11.2.4 Platform Transactions & Reporting
+ 11.2.4.1 Global Transaction List: Display all transactions across the platform, with filtering by asset, date range, status, etc.
+ 11.2.4.2 Liquidity Reserve Transactions & Balances:
+    * View an itemized list of all “add liquidity” or “remove liquidity” events.
+    * Show each user’s holdings and share of the reserve fund.
+ 11.2.4.3 Optional Exports (future enhancement): Export CSV/PDF summaries for accounting, audits, or compliance.
+
+11.2.5 Notifications
+ 11.2.5.1 Automatic or manual notifications to relevant parties (users, other admins) upon certain admin actions (e.g., order approved, user suspended, asset paused).
+
+11.2.6 Admin portal access
+ 11.2.6.1 Admins should be able to access the admin portal through a unique URL.
+ 11.2.6.2 Admins should be able to create a new admin account from the admin portal.
+ 11.2.6.3 Admins should be able to login to the admin portal using their email and password.
+
+11.3 Data Handling & Access Control
+11.3.1 Supabase Authorization
+ 11.3.1.1 Admin accounts should be distinguishable from standard users, either via a role column in users or a separate RBAC mechanism.
+ 11.3.1.2 Enforce row-level security (RLS) so only admins can access admin data (invest order queue, user profiles, etc.). User should still be able to see their own data.
+
+11.3.2 User Privacy & Compliance
+ 11.3.2.1 Admins can see SSN/Tax ID, but access to this data should be logged for audit purposes.
+ 11.3.2.2 KYC/AML status is stored alongside user info (once integrated with a 3rd-party KYC provider). For MVP, display “Pending” or “Not Verified” as placeholders.
+
+11.3.3 Auditing
+ 11.3.3.1 Keep a log of admin actions (e.g., who approved an order, who paused which asset, who disabled a user). This log can be stored in a dedicated admin_logs table for security or compliance.
+
+11.4 To Do Later (Future Enhancements)
+ 11.4.1 Asset Management
+    * Update asset metadata (pictures, APR, terms, documents, etc.) from the admin portal.
+ 11.4.2 Advanced Access Control
+    * Differentiate between “Owner,” “Head Admin,” or “Agent” roles with varying permissions.
+    * Region‐based restrictions or blocking certain user segments.
+ 11.4.3 KYC Integration
+    * Directly integrate the admin portal with third-party KYC providers (e.g., Sumsub) to approve/reject user identity verifications.
+ 11.4.4 Analytics & Reports
+    * In-depth dashboards showing aggregated portfolio performance, user growth, trading volume, etc.
+

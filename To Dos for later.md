@@ -34,29 +34,27 @@ Analytics & Feedback:
 - [ ] Add user feedback survey after onboarding completion
 
 Investment Flow & Database:
-Database Structure:
-- [ ] Design and create assets table (properties, details, status)
-- [ ] Design and create investments table (user investments, amounts, dates)
-- [ ] Design and create transactions table (all financial movements)
-- [ ] Design and create user_balances table (current holdings, available funds)
-- [ ] Set up database triggers for balance updates
-- [ ] Create database functions for investment calculations
-- [ ] Add database constraints and validation rules
 
 Investment UI Flow:
-- [ ] Create asset listing page with filters and search
-- [ ] Create asset details page with full property information
+- [ ] Create filters and search for assets
 - [ ] Create investment calculator component
-- [ ] Build investment confirmation flow
 - [ ] Add transaction success/failure handling
-- [ ] Create transaction history view
-- [ ] Add portfolio balance and performance metrics
+
+Asset details page:
+- [ ] Only allow Sell click if user has tokens / balance
 
 Investment Backend:
 - [ ] Create API endpoints for asset listing and filtering
 - [ ] Create secure transaction processing system
 - [ ] Add investment amount validation
-- [ ] Set up transaction rollback mechanism
 - [ ] Create balance update system
 - [ ] Add investment confirmation emails
-- [ ] Set up automated investment receipts
+
+Invest pop up:
+- [ ] set naming convention for assets
+- [ ] create email when order is created
+- [ ] create email when order is confirmed
+- [ ] add real order confirmation number to confirmation widget
+
+Profile:
+- [ ] Test changing email flow
