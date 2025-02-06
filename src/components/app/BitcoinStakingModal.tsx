@@ -120,132 +120,127 @@ export const BitcoinStakingModal: React.FC<BitcoinStakingModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-dark/80 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-[#1A1A1A] rounded-lg w-full max-w-lg">
-        {/* Header */}
-        <div className="p-6 border-b border-[#2A2A2A]">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-medium text-light">Stake Bitcoin</h2>
-            <button onClick={onClose} className="text-light/60 hover:text-light">
-              ✕
-            </button>
-          </div>
-        </div>
-
-        {showSuccess ? (
-          <div className="p-6">
-            <div className="flex flex-col items-center justify-center py-8">
-              <div className="w-12 h-12 bg-[#00D54B]/20 rounded-full flex items-center justify-center mb-4">
-                <CheckIcon className="w-6 h-6 text-[#00D54B]" />
-              </div>
-              <h3 className="text-xl font-medium text-light mb-2">Success!</h3>
-              <p className="text-light/60 text-center mb-8">
-                Your Bitcoin has been staked successfully.
-              </p>
-              <Button onClick={handleDone} className="w-full">
-                Done
-              </Button>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          if (showSuccess) {
+            handleDone();
+          } else {
+            onClose();
+          }
+        }
+      }}
+    >
+      <div 
+        className="bg-[#1E1E1E] rounded-lg max-w-md w-full text-white border border-light/10" 
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-8">
+            <div className="flex-1" />
+            <h2 className="flex-1 text-xl font-semibold text-center whitespace-nowrap">
+              {showConfirmation ? 'Confirm Stake' : showSuccess ? (
+                <div className="flex items-center justify-center gap-2">
+                  <div className="w-7 h-7 rounded-full bg-[#00D897] flex items-center justify-center">
+                    <CheckIcon className="w-5 h-5 text-white" />
+                  </div>
+                  Confirmed Stake
+                </div>
+              ) : 'Stake Bitcoin'}
+            </h2>
+            <div className="flex-1 flex justify-end">
+              {!showSuccess && (
+                <button
+                  onClick={onClose}
+                  className="text-gray-400 hover:text-gray-300 text-3xl leading-none"
+                >
+                  ×
+                </button>
+              )}
             </div>
           </div>
-        ) : showConfirmation ? (
-          <>
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <p className="text-sm text-light/60">Amount to stake</p>
-                  <p className="text-2xl text-light font-medium mt-1">
-                    {Number(amount).toFixed(8)} BTC
-                  </p>
-                  <p className="text-sm text-light/60 mt-1">
-                    ≈ {formatCurrency(usdValue)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-light/60">APY</p>
-                  <p className="text-2xl text-light font-medium mt-1">9.5%</p>
-                </div>
-              </div>
 
-              <div className="flex items-center justify-between p-4 bg-[#2A2A2A] rounded-lg mb-8">
-                <div>Lock duration</div>
-                <div>7 days</div>
-              </div>
-
-              <div className="bg-[#1A1A1A] rounded-lg p-4 mb-8 border border-[#2A2A2A]">
-                <p className="text-light/80">
-                  Your Bitcoin will continue to earn rewards during the unstaking wait time.
+          {showSuccess ? (
+            <>
+              <div className="flex flex-col items-center mb-6">
+                <div className="relative w-16 h-16 mb-4">
+                  <div className="absolute inset-0">
+                    <svg 
+                      className="w-full h-full -rotate-90"
+                      viewBox="0 0 64 64"
+                    >
+                      <circle
+                        cx="32"
+                        cy="32"
+                        r="29"
+                        fill="none"
+                        stroke="#2A2A2A"
+                        strokeWidth="3"
+                      />
+                      <circle
+                        cx="32"
+                        cy="32"
+                        r="29"
+                        fill="none"
+                        stroke="#F7931A"
+                        strokeWidth="3"
+                        strokeDasharray={`${(stakingPercentage + (Number(amount || 0) / (bitcoinBalance + bitcoinXBalance) * 100)) / 100 * (2 * Math.PI * 29)} ${2 * Math.PI * 29}`}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </div>
+                  <div className="absolute inset-0 p-1.5">
+                    <img
+                      src="https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets//bitcoin-btc-logo.png"
+                      alt="Bitcoin"
+                      className="w-full h-full rounded-full"
+                    />
+                  </div>
+                </div>
+                <h3 className="text-2xl font-medium mb-1">
+                  Staked ${Number(usdValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} of Bitcoin
+                </h3>
+                <p className="text-gray-400">
+                  {Number(amount).toFixed(8)} BTC
                 </p>
               </div>
 
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setShowConfirmation(false)}
-                  className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700"
-                >
-                  <FiEdit2 className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={handleStakeNowClick}
-                  disabled={loading}
-                  className="flex-1 py-3 px-4 rounded-lg text-white font-medium bg-[#F7931A] hover:bg-[#F7931A]/90 disabled:opacity-50"
-                >
-                  {loading ? 'Processing...' : 'Stake now'}
-                </button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="p-6">
-              <div className="relative flex items-baseline">
-                <span className="text-5xl font-medium text-white mr-2">$</span>
-                <input
-                  type="number"
-                  value={inputValue}
-                  onChange={handleInputChange}
-                  className="w-full bg-transparent text-5xl font-medium focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  placeholder="0"
-                  min="0"
-                  max={bitcoinBalance * pricePerToken}
-                  step="0.01"
-                />
-                <button
-                  onClick={handleMaxClick}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 text-sm text-[#F7931A] hover:text-[#F7931A]/80 bg-[#3A3A3A] px-3 py-1 rounded"
-                >
-                  Max
-                </button>
-              </div>
-              <div className="text-gray-400 mt-2">
-                {Number(amount || 0).toFixed(8)} BTC
-              </div>
-            </div>
-
-            <div className="flex justify-between items-start mb-8 px-6">
-              <div className="flex items-center">
-                <div className="flex items-center">
-                  <div className="relative w-12 h-12">
+              <button
+                onClick={handleDone}
+                className="w-full py-3 px-4 rounded-lg text-black font-medium"
+                style={{
+                  background: 'linear-gradient(90deg, #F7931A 0%, #FFAB4A 100%)'
+                }}
+              >
+                Done
+              </button>
+            </>
+          ) : showConfirmation ? (
+            <>
+              <div className="mb-8 px-4">
+                <div className="flex flex-col items-center mb-6">
+                  <div className="relative w-16 h-16 mb-4">
                     <div className="absolute inset-0">
                       <svg 
                         className="w-full h-full -rotate-90"
-                        viewBox="0 0 48 48"
+                        viewBox="0 0 64 64"
                       >
                         <circle
-                          cx="24"
-                          cy="24"
-                          r="21"
+                          cx="32"
+                          cy="32"
+                          r="29"
                           fill="none"
                           stroke="#2A2A2A"
                           strokeWidth="3"
                         />
                         <circle
-                          cx="24"
-                          cy="24"
-                          r="21"
+                          cx="32"
+                          cy="32"
+                          r="29"
                           fill="none"
                           stroke="#F7931A"
                           strokeWidth="3"
-                          strokeDasharray={`${(stakingPercentage + (Number(amount || 0) / (bitcoinBalance + bitcoinXBalance) * 100)) / 100 * (2 * Math.PI * 21)} ${2 * Math.PI * 21}`}
+                          strokeDasharray={`${(stakingPercentage + (Number(amount || 0) / (bitcoinBalance + bitcoinXBalance) * 100)) / 100 * (2 * Math.PI * 29)} ${2 * Math.PI * 29}`}
                           strokeLinecap="round"
                         />
                       </svg>
@@ -258,35 +253,168 @@ export const BitcoinStakingModal: React.FC<BitcoinStakingModalProps> = ({
                       />
                     </div>
                   </div>
+                  <h3 className="text-2xl font-medium mb-1">
+                    Stake ${Number(usdValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} of Bitcoin
+                  </h3>
+                  <p className="text-gray-400">
+                    {Number(amount).toFixed(8)} BTC
+                  </p>
                 </div>
-                <div className="ml-3">
-                  <div className="font-medium">Bitcoin</div>
-                  <div className="text-sm text-[#00D897]">9.5% APY</div>
+
+                <div className="space-y-4 mb-8">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center">
+                      Earning rate
+                      <Tooltip content="The annual percentage yield you'll earn on your staked Bitcoin" />
+                    </div>
+                    <div className="text-[#00D897]">9.5% APY</div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center">
+                      Earning wait time
+                      <Tooltip content="Time before your staked Bitcoin starts earning rewards" />
+                    </div>
+                    <div>7 days</div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center">
+                      Payout frequency
+                      <Tooltip content="How often you'll receive staking rewards" />
+                    </div>
+                    <div>Daily</div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center">
+                      Unstaking wait time
+                      <Tooltip content="Time required to unstake your Bitcoin" />
+                    </div>
+                    <div>7 days</div>
+                  </div>
+                </div>
+
+                <p className="text-sm text-gray-400 mb-4">
+                  Staking involves risks. <a href="#" className="text-[#F7931A] hover:text-[#E68A19]">Learn more</a>
+                </p>
+
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setShowConfirmation(false)}
+                    className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700"
+                  >
+                    <FiEdit2 className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={handleStakeNowClick}
+                    disabled={loading}
+                    className="flex-1 py-3 px-4 rounded-lg text-black font-medium disabled:opacity-50"
+                    style={{
+                      background: 'linear-gradient(90deg, #F7931A 0%, #FFAB4A 100%)'
+                    }}
+                  >
+                    {loading ? 'Processing...' : 'Stake now'}
+                  </button>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="font-medium">{formatCurrency(bitcoinBalance * pricePerToken)}</div>
-                <div className="text-sm text-gray-400">Available</div>
+            </>
+          ) : (
+            <>
+              <div className="mb-8 px-4">
+                <div className="relative flex items-baseline">
+                  <span className="text-5xl font-medium text-white mr-2">$</span>
+                  <input
+                    type="number"
+                    value={inputValue}
+                    onChange={handleInputChange}
+                    className="w-full bg-transparent text-5xl font-medium focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    placeholder="0"
+                    min="0"
+                    max={bitcoinBalance * pricePerToken}
+                    step="0.01"
+                  />
+                  <button
+                    onClick={handleMaxClick}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 text-sm text-[#F7931A] hover:text-[#F7931A]/80 bg-[#3A3A3A] px-3 py-1 rounded"
+                  >
+                    Max
+                  </button>
+                </div>
+                <div className="text-gray-400 mt-2">
+                  {Number(amount || 0).toFixed(8)} BTC
+                </div>
               </div>
-            </div>
 
-            {error && (
-              <div className="mb-4 px-6 text-sm text-red-500">
-                {error}
+              <div className="flex justify-between items-start mb-8 px-6">
+                <div className="flex items-center">
+                  <div className="flex items-center">
+                    <div className="relative w-12 h-12">
+                      <div className="absolute inset-0">
+                        <svg 
+                          className="w-full h-full -rotate-90"
+                          viewBox="0 0 48 48"
+                        >
+                          <circle
+                            cx="24"
+                            cy="24"
+                            r="21"
+                            fill="none"
+                            stroke="#2A2A2A"
+                            strokeWidth="3"
+                          />
+                          <circle
+                            cx="24"
+                            cy="24"
+                            r="21"
+                            fill="none"
+                            stroke="#F7931A"
+                            strokeWidth="3"
+                            strokeDasharray={`${(stakingPercentage + (Number(amount || 0) / (bitcoinBalance + bitcoinXBalance) * 100)) / 100 * (2 * Math.PI * 21)} ${2 * Math.PI * 21}`}
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </div>
+                      <div className="absolute inset-0 p-1.5">
+                        <img
+                          src="https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets//bitcoin-btc-logo.png"
+                          alt="Bitcoin"
+                          className="w-full h-full rounded-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="ml-3">
+                    <div className="font-medium">Bitcoin</div>
+                    <div className="text-sm text-[#00D897]">9.5% APY</div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-medium">
+                    ${(bitcoinBalance * pricePerToken).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <div className="text-sm text-gray-400">Available</div>
+                </div>
               </div>
-            )}
 
-            <div className="p-6 pt-0">
-              <button
-                onClick={() => setShowConfirmation(true)}
-                disabled={!amount || Number(amount) <= 0 || Number(amount) > bitcoinBalance}
-                className="w-full py-3 px-4 rounded-lg text-white font-medium bg-[#F7931A] hover:bg-[#F7931A]/90 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Preview stake
-              </button>
-            </div>
-          </>
-        )}
+              {error && (
+                <div className="mb-4 px-6 text-sm text-red-500">
+                  {error}
+                </div>
+              )}
+
+              <div className="p-6 pt-0">
+                <button
+                  onClick={() => setShowConfirmation(true)}
+                  disabled={!amount || Number(amount) <= 0 || Number(amount) > bitcoinBalance}
+                  className="w-full py-3 px-4 rounded-lg text-black font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    background: 'linear-gradient(90deg, #F7931A 0%, #FFAB4A 100%)'
+                  }}
+                >
+                  Preview stake
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

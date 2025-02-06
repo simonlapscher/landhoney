@@ -13,6 +13,7 @@ import { HoneyStakingModal } from './HoneyStakingModal';
 import { HoneyUnstakingModal } from './HoneyUnstakingModal';
 import { BitcoinStakingModal } from './BitcoinStakingModal';
 import { BitcoinUnstakingModal } from './BitcoinUnstakingModal';
+import { BitcoinAssetDisplay } from './BitcoinAssetDisplay';
 
 interface RawAssetResponse extends BaseAsset {
   debt_assets?: {
@@ -202,9 +203,15 @@ export const Portfolio: React.FC = () => {
           }
         })) as Transaction[];
 
+        // Map balances and combine HONEY/HONEYX and BTC/BTCX
         const mappedBalances = (balancesData as RawBalanceResponse[])
           .filter(b => Number(b.balance) > 0)
-          .map(b => {
+          .reduce((acc, b) => {
+            // Skip HONEYX and BTCX as they'll be combined
+            if (b.asset.symbol === 'HONEYX' || b.asset.symbol === 'BTCX') {
+              return acc;
+            }
+
             console.log('Raw asset details:', {
               symbol: b.asset.symbol,
               type: b.asset.type,
@@ -223,20 +230,38 @@ export const Portfolio: React.FC = () => {
                 ? `${debtDetails.city}, ${debtDetails.state}`
                 : undefined
             };
-            
-            return {
+
+            let balance = Number(b.balance);
+
+            // If this is HONEY, add HONEYX balance
+            if (b.asset.symbol === 'HONEY') {
+              const honeyXBalance = balancesData.find(bal => bal.asset.symbol === 'HONEYX');
+              if (honeyXBalance) {
+                balance += Number(honeyXBalance.balance);
+              }
+            }
+
+            // If this is BTC, add BTCX balance
+            if (b.asset.symbol === 'BTC') {
+              const btcXBalance = balancesData.find(bal => bal.asset.symbol === 'BTCX');
+              if (btcXBalance) {
+                balance += Number(btcXBalance.balance);
+              }
+            }
+
+            return [...acc, {
               id: b.id,
               user_id: b.user_id,
               asset_id: b.asset_id,
-              balance: Number(b.balance),
-              total_value: Number(b.balance) * Number(b.asset.price_per_token),
+              balance: balance,
+              total_value: balance * Number(b.asset.price_per_token),
               total_interest_earned: Number(b.total_interest_earned),
               created_at: b.created_at,
               updated_at: b.updated_at,
               last_transaction_at: b.last_transaction_at || null,
               asset
-            };
-          }) as PortfolioBalance[];
+            }];
+          }, []) as PortfolioBalance[];
 
         console.log('Mapped balances:', mappedBalances);
 
@@ -656,16 +681,23 @@ export const Portfolio: React.FC = () => {
                                 </svg>
                               </div>
                             )}
-                            <img
-                              src={balance.asset.main_image}
-                              alt={balance.asset.name}
-                              className="w-10 h-10 rounded-full relative"
-                              style={{
-                                zIndex: 10,
-                                border: balance.asset.symbol === 'HONEY' ? '2px solid transparent' : 'none',
-                                background: balance.asset.symbol === 'HONEY' ? '#1E1E1E' : 'transparent'
-                              }}
-                            />
+                            {balance.asset.symbol === 'BTC' ? (
+                              <BitcoinAssetDisplay 
+                                asset={balance.asset}
+                                stakingPercentage={btcStakingInfo?.stakingPercentage || 0}
+                              />
+                            ) : (
+                              <img
+                                src={balance.asset.main_image}
+                                alt={balance.asset.name}
+                                className="w-10 h-10 rounded-full relative"
+                                style={{
+                                  zIndex: 10,
+                                  border: balance.asset.symbol === 'HONEY' ? '2px solid transparent' : 'none',
+                                  background: balance.asset.symbol === 'HONEY' ? '#1E1E1E' : 'transparent'
+                                }}
+                              />
+                            )}
                           </div>
                           <div className="ml-3">
                             <h3 className="text-lg font-semibold truncate">
