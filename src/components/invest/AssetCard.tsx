@@ -60,7 +60,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset }) => {
     if (asset.symbol === 'HONEY') {
       return {
         color: '#FFD700',
-        description: 'Gold-backed token'
+        description: 'Gold-backed token. 1 Honey = 1oz gold'
       };
     }
     return {
@@ -124,7 +124,10 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset }) => {
 
             <button 
               onClick={handleInvestClick}
-              className="w-full bg-[#00D54B] text-dark font-medium py-3 px-6 rounded-lg hover:bg-[#00D54B]/90 transition-colors"
+              className="w-full text-dark font-medium py-3 px-6 rounded-lg hover:opacity-90 transition-colors"
+              style={{
+                background: 'linear-gradient(90deg, #00D54B 0%, #00F76C 100%)'
+              }}
             >
               Invest
             </button>
@@ -145,8 +148,14 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset }) => {
             </div>
             <button 
               onClick={handleInvestClick}
-              style={{ backgroundColor: getAssetConfig(asset as CommodityAsset).color }}
               className="w-full text-dark font-medium py-3 px-6 rounded-lg hover:opacity-90 transition-colors"
+              style={{
+                background: asset.symbol === 'BTC' 
+                  ? 'linear-gradient(90deg, #F7931A 0%, #FFAB4A 100%)'
+                  : asset.symbol === 'HONEY'
+                  ? 'linear-gradient(90deg, #FFD700 0%, #FFA500 100%)'
+                  : 'linear-gradient(90deg, #00D54B 0%, #00F76C 100%)'
+              }}
             >
               Buy
             </button>

@@ -43,7 +43,10 @@ export const CommodityInvestmentBox: React.FC<CommodityInvestmentBoxProps> = ({
         <div className="mb-6 flex items-center gap-2">
           <p className="text-light/60 text-sm">Your balance</p>
           <p className="text-light text-sm">
-            ${userBalance.toLocaleString()}
+            ${(userBalance * asset.price_per_token).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })}
           </p>
         </div>
 
@@ -61,8 +64,14 @@ export const CommodityInvestmentBox: React.FC<CommodityInvestmentBoxProps> = ({
         <div className="flex gap-4">
           <button
             onClick={() => setShowInvestModal(true)}
-            style={{ backgroundColor: config.color }}
-            className="flex-1 text-white font-medium py-3 px-6 rounded-lg hover:opacity-90 transition-colors"
+            className="flex-1 text-dark font-medium py-3 px-6 rounded-lg hover:opacity-90 transition-colors"
+            style={{
+              background: asset.symbol === 'BTC'
+                ? 'linear-gradient(90deg, #F7931A 0%, #FFAB4A 100%)'
+                : asset.symbol === 'HONEY'
+                ? 'linear-gradient(90deg, #FFD700 0%, #FFA500 100%)'
+                : 'linear-gradient(90deg, #00D54B 0%, #00F76C 100%)'
+            }}
           >
             Buy
           </button>

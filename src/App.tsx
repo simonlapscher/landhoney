@@ -57,7 +57,7 @@ const App: React.FC = () => {
           {/* Public routes */}
           <Route path="/" element={<WelcomeScreen />} />
           
-          {/* Legal routes - publicly accessible */}
+          {/* Legal routes */}
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/marketing" element={<MarketingPreferences />} />

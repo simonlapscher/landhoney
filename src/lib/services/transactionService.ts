@@ -742,5 +742,72 @@ export const transactionService = {
         error instanceof Error ? error.message : 'Unknown error'
       );
     }
+  },
+
+  async depositCash(userId: string, amount: number): Promise<Transaction> {
+    const { data: usdAsset, error: assetError } = await supabase
+      .from('assets')
+      .select('*')
+      .eq('symbol', 'USD')
+      .single();
+
+    if (assetError) throw assetError;
+
+    const { data: transaction, error } = await supabase
+      .from('transactions')
+      .insert({
+        user_id: userId,
+        asset_id: usdAsset.id,
+        type: 'deposit',
+        amount: amount,
+        price_per_token: 1, // USD is always 1:1
+        status: 'pending',
+        metadata: {}
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return transaction;
+  },
+
+  async withdrawCash(userId: string, amount: number): Promise<Transaction> {
+    const { data: usdAsset, error: assetError } = await supabase
+      .from('assets')
+      .select('*')
+      .eq('symbol', 'USD')
+      .single();
+
+    if (assetError) throw assetError;
+
+    // Check if user has enough balance
+    const { data: balance, error: balanceError } = await supabase
+      .from('user_balances')
+      .select('balance')
+      .eq('user_id', userId)
+      .eq('asset_id', usdAsset.id)
+      .single();
+
+    if (balanceError) throw balanceError;
+    if (!balance || balance.balance < amount) {
+      throw new Error('Insufficient balance');
+    }
+
+    const { data: transaction, error } = await supabase
+      .from('transactions')
+      .insert({
+        user_id: userId,
+        asset_id: usdAsset.id,
+        type: 'withdraw',
+        amount: amount,
+        price_per_token: 1,
+        status: 'pending',
+        metadata: {}
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return transaction;
   }
 }; 

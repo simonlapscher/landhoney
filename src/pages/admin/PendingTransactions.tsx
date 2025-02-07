@@ -7,7 +7,7 @@ interface Transaction {
   created_at: string;
   user_id: string;
   asset_id: string;
-  type: 'buy' | 'sell';
+  type: 'buy' | 'sell' | 'deposit' | 'withdraw';
   amount: number;
   price_per_token: number;
   status: 'pending' | 'completed' | 'failed' | 'cancelled';
@@ -107,7 +107,15 @@ export const PendingTransactions: React.FC = () => {
           transactions.map((transaction) => (
             <div key={transaction.id} className="grid grid-cols-12 gap-4 items-center py-4">
               <div className="col-span-3 text-light">{transaction.user_email}</div>
-              <div className="col-span-1 capitalize text-light">{transaction.type}</div>
+              <div className="col-span-1 capitalize">
+                {transaction.type === 'deposit' ? (
+                  <span className="text-[#00D897]">Deposit</span>
+                ) : transaction.type === 'withdraw' ? (
+                  <span className="text-yellow-500">Withdraw</span>
+                ) : (
+                  <span>{transaction.type}</span>
+                )}
+              </div>
               <div className="col-span-2 text-light">{transaction.asset_symbol}</div>
               <div className="col-span-2">
                 <div className="text-light">${(transaction.amount * transaction.price_per_token).toLocaleString()}</div>

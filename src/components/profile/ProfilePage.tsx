@@ -12,6 +12,9 @@ interface Profile {
   phone?: string;
   country?: string;
   email?: string;
+  usdc_wallet_address?: string;
+  bank_account_number?: string;
+  bank_routing_number?: string;
 }
 
 export const ProfilePage: React.FC = () => {
@@ -22,12 +25,21 @@ export const ProfilePage: React.FC = () => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [isEditingPhone, setIsEditingPhone] = useState(false);
+  const [isEditingFinancial, setIsEditingFinancial] = useState(false);
+  const [isEditingUSDC, setIsEditingUSDC] = useState(false);
+  const [isEditingBankAccount, setIsEditingBankAccount] = useState(false);
+  const [isEditingRoutingNumber, setIsEditingRoutingNumber] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string>("https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/honeycito.png");
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [financialInfo, setFinancialInfo] = useState({
+    usdcWalletAddress: '',
+    bankAccountNumber: '',
+    bankRoutingNumber: ''
+  });
 
   useEffect(() => {
     console.log('Current user:', user);
@@ -65,10 +77,17 @@ export const ProfilePage: React.FC = () => {
 
       console.log('Found profile:', profile);
       setProfile(profile);
+      
+      // Update financial info from profile data
+      setFinancialInfo({
+        usdcWalletAddress: profile.usdc_wallet_address || '',
+        bankAccountNumber: profile.bank_account_number || '',
+        bankRoutingNumber: profile.bank_routing_number || ''
+      });
+
       setError(null);
     } catch (error) {
-      console.error('Error fetching profile:', error);
-      setError('An unexpected error occurred. Please try again.');
+      console.error('Error:', error);
     } finally {
       setLoading(false);
     }
@@ -311,6 +330,45 @@ export const ProfilePage: React.FC = () => {
     }
   };
 
+  const handleSaveFinancialInfo = async () => {
+    try {
+      const { data: updatedProfile, error: updateError } = await supabase.rpc(
+        'update_profile_financial_info',
+        {
+          p_user_id: profile?.user_id,
+          p_usdc_wallet_address: financialInfo.usdcWalletAddress,
+          p_bank_account_number: financialInfo.bankAccountNumber,
+          p_bank_routing_number: financialInfo.bankRoutingNumber
+        }
+      );
+
+      if (updateError) throw updateError;
+
+      // Update profile and financial info from the returned data
+      setProfile(updatedProfile);
+      setFinancialInfo({
+        usdcWalletAddress: updatedProfile.usdc_wallet_address || '',
+        bankAccountNumber: updatedProfile.bank_account_number || '',
+        bankRoutingNumber: updatedProfile.bank_routing_number || ''
+      });
+
+      // Close the editing state for the specific field being edited
+      if (isEditingUSDC) setIsEditingUSDC(false);
+      if (isEditingBankAccount) setIsEditingBankAccount(false);
+      if (isEditingRoutingNumber) setIsEditingRoutingNumber(false);
+
+    } catch (error) {
+      console.error('Error updating financial info:', error);
+      setError('Failed to update payment information. Please try again.');
+    }
+  };
+
+  // Add a helper function to format wallet address
+  const formatWalletAddress = (address: string) => {
+    if (!address) return 'Not set';
+    return `${address.slice(0, 6)}...${address.slice(-6)}`;
+  };
+
   if (loading) {
     return <div className="animate-pulse">Loading...</div>;
   }
@@ -508,6 +566,180 @@ export const ProfilePage: React.FC = () => {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Payment Information Section */}
+      <div className="mt-8">
+        <h3 className="text-xl font-bold text-light mb-6">Payment Information</h3>
+        <div className="space-y-6">
+          {/* USDC Wallet */}
+          <div>
+            <label className="block text-sm font-medium text-light/60 mb-1">
+              External USDC Wallet Address (Ethereum)
+            </label>
+            <div className="flex items-center">
+              {isEditingUSDC ? (
+                <div className="flex-1">
+                  <div className="flex items-center">
+                    <Input
+                      value={financialInfo.usdcWalletAddress}
+                      onChange={(e) => setFinancialInfo(prev => ({
+                        ...prev,
+                        usdcWalletAddress: e.target.value
+                      }))}
+                      placeholder="0x..."
+                      className="!bg-dark-2 w-[300px]"
+                    />
+                    <Button
+                      variant="secondary"
+                      className="rounded-full px-6 py-1.5 bg-light/10 hover:bg-light/20 ml-2"
+                      onClick={() => setIsEditingUSDC(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  <div className="mt-4">
+                    <Button
+                      variant="primary"
+                      onClick={handleSaveFinancialInfo}
+                      className="rounded-full px-8 py-1.5"
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center">
+                  <div className="flex items-center">
+                    <p className="text-light text-lg">
+                      {formatWalletAddress(financialInfo.usdcWalletAddress)}
+                    </p>
+                    <Button
+                      variant="secondary"
+                      className="rounded-full px-6 py-1.5 bg-light/10 hover:bg-light/20 ml-2"
+                      onClick={() => setIsEditingUSDC(true)}
+                    >
+                      Edit
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bank Account Info - Row */}
+          <div className="flex gap-12">
+            {/* Bank Account Number */}
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-light/60 mb-1">
+                Bank Account Number
+              </label>
+              <div className="flex items-center">
+                {isEditingBankAccount ? (
+                  <div className="flex-1">
+                    <div className="flex items-center">
+                      <Input
+                        value={financialInfo.bankAccountNumber}
+                        onChange={(e) => setFinancialInfo(prev => ({
+                          ...prev,
+                          bankAccountNumber: e.target.value
+                        }))}
+                        className="!bg-dark-2 w-[200px]"
+                      />
+                      <Button
+                        variant="secondary"
+                        className="rounded-full px-6 py-1.5 bg-light/10 hover:bg-light/20 ml-2"
+                        onClick={() => setIsEditingBankAccount(false)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                    <div className="mt-4">
+                      <Button
+                        variant="primary"
+                        onClick={handleSaveFinancialInfo}
+                        className="rounded-full px-8 py-1.5"
+                      >
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center">
+                    <p className="text-light text-lg">
+                      {financialInfo.bankAccountNumber ? 
+                        '••••' + financialInfo.bankAccountNumber.slice(-4) : 
+                        'Not set'
+                      }
+                    </p>
+                    <Button
+                      variant="secondary"
+                      className="rounded-full px-6 py-1.5 bg-light/10 hover:bg-light/20 ml-2"
+                      onClick={() => setIsEditingBankAccount(true)}
+                    >
+                      Edit
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Bank Routing Number */}
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-light/60 mb-1">
+                Bank Routing Number
+              </label>
+              <div className="flex items-center">
+                {isEditingRoutingNumber ? (
+                  <div className="flex-1">
+                    <div className="flex items-center">
+                      <Input
+                        value={financialInfo.bankRoutingNumber}
+                        onChange={(e) => setFinancialInfo(prev => ({
+                          ...prev,
+                          bankRoutingNumber: e.target.value
+                        }))}
+                        className="!bg-dark-2 w-[200px]"
+                      />
+                      <Button
+                        variant="secondary"
+                        className="rounded-full px-6 py-1.5 bg-light/10 hover:bg-light/20 ml-2"
+                        onClick={() => setIsEditingRoutingNumber(false)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                    <div className="mt-4">
+                      <Button
+                        variant="primary"
+                        onClick={handleSaveFinancialInfo}
+                        className="rounded-full px-8 py-1.5"
+                      >
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center">
+                    <p className="text-light text-lg">
+                      {financialInfo.bankRoutingNumber ? 
+                        '••••' + financialInfo.bankRoutingNumber.slice(-4) : 
+                        'Not set'
+                      }
+                    </p>
+                    <Button
+                      variant="secondary"
+                      className="rounded-full px-6 py-1.5 bg-light/10 hover:bg-light/20 ml-2"
+                      onClick={() => setIsEditingRoutingNumber(true)}
+                    >
+                      Edit
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

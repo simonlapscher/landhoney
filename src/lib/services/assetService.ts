@@ -104,7 +104,7 @@ export const assetService = {
         
         console.log('Mapped debt asset:', mappedAsset);
         return mappedAsset;
-      } else {
+      } else if (asset.type === 'commodity') {
         return {
           ...asset,
           type: 'commodity' as const,
@@ -113,6 +113,12 @@ export const assetService = {
           ) || [],
           main_image: asset.main_image
         } as CommodityAsset;
+      } else {
+        // For cash assets or any other types, preserve the original type
+        return {
+          ...asset,
+          main_image: asset.main_image
+        };
       }
     });
   },

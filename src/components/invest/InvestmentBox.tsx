@@ -105,7 +105,10 @@ export const InvestmentBox: React.FC<InvestmentBoxProps> = ({
         <div className="flex gap-4">
           <button
             onClick={() => setShowInvestModal(true)}
-            className="flex-1 bg-[#00D54B] text-dark font-medium py-3 px-6 rounded-lg hover:bg-[#00D54B]/90 transition-colors"
+            className="flex-1 text-dark font-medium py-3 px-6 rounded-lg hover:opacity-90 transition-colors"
+            style={{
+              background: 'linear-gradient(90deg, #00D54B 0%, #00F76C 100%)'
+            }}
           >
             Invest
           </button>

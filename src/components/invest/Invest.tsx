@@ -33,9 +33,38 @@ export const Invest: React.FC = () => {
     fetchAssets();
   }, []);
 
+  // First, filter out staking tokens and cash assets
+  const investableAssets = assets.filter(asset => {
+    const isStakingToken = ['BTCX', 'HONEYX'].includes(asset.symbol);
+    const isInvestable = asset.type === 'debt' || asset.type === 'commodity';
+    
+    // Add more detailed logging specifically for USD
+    if (asset.symbol === 'USD') {
+      console.log('USD Asset Check:', {
+        symbol: asset.symbol,
+        type: asset.type,
+        isStakingToken,
+        isInvestable,
+        rawAsset: asset
+      });
+    }
+    
+    const shouldShow = !isStakingToken && isInvestable;
+    console.log(`Asset ${asset.symbol}: shouldShow=${shouldShow}, type=${asset.type}`);
+    
+    return shouldShow;
+  });
+
+  // Add logging for final filtered assets
+  console.log('Final investable assets:', investableAssets.map(a => ({
+    symbol: a.symbol,
+    type: a.type
+  })));
+
+  // Then filter by category
   const filteredAssets = selectedIndex === 0 
-    ? assets
-    : assets.filter(asset => 
+    ? investableAssets // Show all investable assets (no cash)
+    : investableAssets.filter(asset => 
         asset.type === (selectedIndex === 1 ? 'debt' : 'commodity')
       );
 

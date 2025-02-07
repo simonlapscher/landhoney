@@ -1,7 +1,7 @@
 export interface BaseAsset {
   id: string;
   name: string;
-  type: 'debt' | 'commodity';
+  type: 'debt' | 'commodity' | 'cash';
   main_image: string;
   description: string;
   created_at: string;
@@ -52,4 +52,25 @@ export interface AssetBalance {
   updated_at: string;
 }
 
-export type Asset = DebtAsset | CommodityAsset; 
+export interface CashAsset extends BaseAsset {
+  type: 'cash';
+}
+
+export interface Asset {
+  id: string;
+  name: string;
+  description: string;
+  short_description?: string;
+  main_image: string;
+  type: 'debt' | 'commodity' | 'cash';
+  created_at: string;
+  updated_at: string;
+  symbol: string;
+  price_per_token: number;
+  decimals: number;
+  token_supply: number;
+  min_investment: number;
+  max_investment: number;
+}
+
+export type Asset = DebtAsset | CommodityAsset | CashAsset; 
