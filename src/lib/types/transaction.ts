@@ -1,6 +1,6 @@
 export type TransactionType = 'buy' | 'sell' | 'convert' | 'earn' | 'stake' | 'unstake' | 'loan_distribution';
 export type TransactionStatus = 'pending' | 'completed' | 'failed' | 'cancelled';
-export type PaymentMethod = 'USD' | 'USDC';
+export type PaymentMethod = 'usd_balance' | 'bank_account' | 'usdc';
 
 export interface TransactionMetadata {
   payment_method?: PaymentMethod;

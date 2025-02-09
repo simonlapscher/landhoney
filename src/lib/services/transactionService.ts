@@ -809,5 +809,43 @@ export const transactionService = {
 
     if (error) throw error;
     return transaction;
+  },
+
+  async createUsdBalanceOrder({
+    userId,
+    assetId,
+    amount,
+    totalToPay,
+    fee
+  }: {
+    userId: string;
+    assetId: string;
+    amount: number;
+    totalToPay: number;
+    fee: number;
+  }) {
+    const { data, error } = await supabase.rpc('create_usd_balance_order', {
+      p_user_id: userId,
+      p_asset_id: assetId,
+      p_amount: amount,
+      p_total_to_pay: totalToPay,
+      p_fee: fee
+    });
+
+    if (error) throw error;
+    return data;
+  },
+
+  async approveUsdBalanceOrder(orderId: string) {
+    const { data, error } = await supabase.rpc('approve_usd_balance_order', {
+      p_transaction_id: orderId
+    });
+
+    if (error) {
+      console.error('Error approving USD balance order:', error);
+      throw error;
+    }
+
+    return data;
   }
 }; 

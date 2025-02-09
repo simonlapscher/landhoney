@@ -60,7 +60,22 @@ export const OrderDetailPopup: React.FC<OrderDetailPopupProps> = ({
   };
 
   const subtotalAmount = transaction.amount * transaction.price_per_token;
-  const fee = transaction.metadata?.fee || subtotalAmount * 0.02; // 2% default fee if not specified
+  const getFee = () => {
+    // If fee is specified in metadata, use that
+    if (transaction.metadata?.fee) {
+      return transaction.metadata.fee;
+    }
+    
+    // For buy/sell transactions, use 0.5%
+    if (transaction.type === 'buy' || transaction.type === 'sell') {
+      return subtotalAmount * 0.005;
+    }
+    
+    // For other transaction types, return 0
+    return 0;
+  };
+
+  const fee = getFee();
   const totalAmount = subtotalAmount + fee;
 
   return (
