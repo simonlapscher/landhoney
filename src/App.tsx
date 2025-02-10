@@ -12,11 +12,8 @@ import {
   Completion,
 } from './components/onboarding/OnboardingComponents';
 import { Login } from './components/onboarding/Login';
-import {
-  Portfolio,
-  Invest,
-  LiquidReserve,
-} from './components/app/AppComponents';
+import { Portfolio } from './components/app/Portfolio';
+import { Invest } from './components/invest/Invest';
 import { TermsOfService } from './components/legal/TermsOfService';
 import { PrivacyPolicy } from './components/legal/PrivacyPolicy';
 import { MarketingPreferences } from './components/legal/MarketingPreferences';
@@ -33,6 +30,8 @@ import { TokenMinting } from './pages/admin/TokenMinting';
 import { AuthProvider } from './lib/context/AuthContext';
 import { ProfilePage } from './components/profile/ProfilePage';
 import { AddAsset } from './pages/admin/AddAsset';
+import { LiquidReserve } from './pages/app/LiquidReserve';
+import { Toaster } from 'react-hot-toast';
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -50,8 +49,13 @@ const App: React.FC = () => {
     return () => window.removeEventListener('popstate', updateTitle);
   }, []);
 
+  useEffect(() => {
+    console.log('App: Routes initialized');
+  }, []);
+
   return (
     <AuthProvider>
+      <Toaster position="top-right" />
       <BrowserRouter>
         <Routes>
           {/* Public routes */}
@@ -97,7 +101,15 @@ const App: React.FC = () => {
             <Route path="portfolio" element={<Portfolio />} />
             <Route path="invest" element={<Invest />} />
             <Route path="invest/:id" element={<AssetDetail />} />
-            <Route path="reserve" element={<LiquidReserve />} />
+            <Route 
+              path="liquid-reserve" 
+              element={
+                <React.Suspense fallback={<div>Loading...</div>}>
+                  {console.log('Rendering LiquidReserve route')}
+                  <LiquidReserve />
+                </React.Suspense>
+              } 
+            />
           </Route>
 
           {/* Catch all route */}

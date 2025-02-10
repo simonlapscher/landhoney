@@ -361,7 +361,7 @@ export const HoneyUnstakingModal: React.FC<HoneyUnstakingModalProps> = ({
                           fill="none"
                           stroke="#FFD700"
                           strokeWidth="3"
-                          strokeDasharray={`${((honeyXBalance - Number(amount || 0)) / (honeyBalance + honeyXBalance) * 100 / 100) * (2 * Math.PI * 21)} ${2 * Math.PI * 21}`}
+                          strokeDasharray={`${((honeyXBalance - Number(amount || 0)) / (honeyBalance + honeyXBalance) * 100) / 100 * (2 * Math.PI * 21)} ${2 * Math.PI * 21}`}
                           strokeLinecap="round"
                         />
                       </svg>

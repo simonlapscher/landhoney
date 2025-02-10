@@ -201,7 +201,7 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
                       fill="none"
                       stroke="#FFD700"
                       strokeWidth="3"
-                      strokeDasharray={`${(stakingPercentage + (Number(amount || 0) / (honeyBalance + honeyXBalance) * 100)) / 100 * (2 * Math.PI * 29)} ${2 * Math.PI * 29}`}
+                      strokeDasharray={`${((stakingPercentage + (Number(amount || 0) / (honeyBalance + honeyXBalance) * 100)) / 100) * (2 * Math.PI * 29)} ${2 * Math.PI * 29}`}
                       strokeLinecap="round"
                     />
                   </svg>
@@ -257,7 +257,7 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
                       fill="none"
                       stroke="#FFD700"
                       strokeWidth="3"
-                      strokeDasharray={`${(stakingPercentage + (Number(amount || 0) / (honeyBalance + honeyXBalance) * 100)) / 100 * (2 * Math.PI * 29)} ${2 * Math.PI * 29}`}
+                      strokeDasharray={`${((stakingPercentage + (Number(amount || 0) / (honeyBalance + honeyXBalance) * 100)) / 100) * (2 * Math.PI * 29)} ${2 * Math.PI * 29}`}
                       strokeLinecap="round"
                     />
                   </svg>

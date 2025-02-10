@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { supabase, adminSupabase } from '../supabase';
 import { Transaction, TransactionMetadata, PaymentMethod } from '../types/transaction';
 import { DebtAsset, AssetBalance } from '../types/asset';
 
@@ -11,6 +11,14 @@ export class TransactionError extends Error {
     super(message);
     this.name = 'TransactionError';
   }
+}
+
+interface ApproveSellTransactionParams {
+  transactionId: string;
+  poolId: string;
+  pricePerToken: number;
+  poolReduction: number;
+  userTokens: number;
 }
 
 export const transactionService = {
@@ -847,5 +855,39 @@ export const transactionService = {
     }
 
     return data;
+  },
+
+  async approveSellTransaction({
+    transactionId,
+    poolId,
+    pricePerToken,
+    poolReduction,
+    userTokens
+  }: ApproveSellTransactionParams) {
+    try {
+      console.log('Calling process_sell_transaction with params:', {
+        p_transaction_id: transactionId,
+        p_pool_id: poolId,
+        p_price_per_token: pricePerToken,
+        p_payment_amount: poolReduction
+      });
+
+      const { data, error } = await adminSupabase.rpc('process_sell_transaction', {
+        p_transaction_id: transactionId,
+        p_pool_id: poolId,
+        p_price_per_token: pricePerToken,
+        p_payment_amount: poolReduction
+      });
+
+      if (error) {
+        console.error('Detailed error from process_sell_transaction:', error);
+        throw new Error(`Failed to approve sell transaction: ${error.message}`);
+      }
+
+      return data;
+    } catch (err) {
+      console.error('Error in approveSellTransaction:', err);
+      throw err;
+    }
   }
 }; 
