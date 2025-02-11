@@ -5,6 +5,7 @@ import { Button } from '../common/Button';
 import { IoMdInformationCircleOutline } from 'react-icons/io';
 import { FiEdit2 } from 'react-icons/fi';
 import { CheckIcon } from '@heroicons/react/24/outline';
+import { supabase } from '../../lib/supabase';
 
 interface HoneyStakingModalProps {
   isOpen: boolean;
@@ -29,6 +30,37 @@ const Tooltip: React.FC<TooltipProps> = ({ content }) => (
     </div>
   </div>
 );
+
+const updatePoolAfterStaking = async (poolId: string, amount: number, pricePerToken: number) => {
+  try {
+    // 1. Update or insert pool_assets record
+    const { error: poolAssetsError } = await supabase
+      .from('pool_assets')
+      .upsert({
+        pool_id: poolId,
+        asset_id: honeyAsset.id,
+        balance: amount
+      }, {
+        onConflict: 'pool_id,asset_id',
+        ignoreDuplicates: false
+      });
+
+    if (poolAssetsError) throw poolAssetsError;
+
+    // 2. Update pool's TVL
+    const { error: poolError } = await supabase
+      .from('pools')
+      .update({
+        total_value_locked: supabase.sql`total_value_locked + ${amount * pricePerToken}`
+      })
+      .eq('id', poolId);
+
+    if (poolError) throw poolError;
+  } catch (err) {
+    console.error('Error updating pool after staking:', err);
+    throw err;
+  }
+};
 
 export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
   isOpen,
@@ -90,15 +122,21 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
       }
 
       console.log('Starting staking transaction...', { numAmount, userId });
-      const transaction = await transactionService.stakeHoney(userId, numAmount);
-      console.log('Staking transaction completed:', transaction);
+      await transactionService.stakeHoney(userId, numAmount);
       
-      // Store the current amount before any state changes
-      const confirmedAmount = amount;
-      
+      // After successful staking, update pool
+      const honeyPool = await supabase
+        .from('pools')
+        .select('id')
+        .eq('type', 'honey')
+        .single();
+        
+      if (honeyPool) {
+        await updatePoolAfterStaking(honeyPool.data.id, numAmount, pricePerToken);
+      }
+
       setShowConfirmation(false);
       setShowSuccess(true);
-      console.log('Set success state:', { showSuccess: true, showConfirmation: false });
     } catch (err) {
       console.error('Staking error:', err);
       setError(err instanceof Error ? err.message : 'An error occurred while staking');

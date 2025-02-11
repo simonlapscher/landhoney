@@ -43,6 +43,7 @@ export const LiquidReserve: React.FC = () => {
   useEffect(() => {
     const fetchPoolData = async () => {
       try {
+        console.log('Fetching pool data...');
         const { data, error } = await supabase
           .from('pools')
           .select(`
@@ -68,6 +69,21 @@ export const LiquidReserve: React.FC = () => {
           `);
 
         if (error) throw error;
+        
+        // Log the data to debug
+        console.log('Pool data:', data);
+        
+        if (data) {
+          // Ensure we're getting the correct data for each pool
+          data.forEach(pool => {
+            console.log(`${pool.type} pool:`, {
+              mainAsset: pool.main_asset,
+              poolAssets: pool.pool_assets,
+              tvl: pool.total_value_locked
+            });
+          });
+        }
+        
         setPools(data || []);
       } catch (err) {
         console.error('Error fetching pool data:', err);
@@ -159,6 +175,134 @@ export const LiquidReserve: React.FC = () => {
     return icons[type as keyof typeof icons];
   };
 
+  const calculatePoolBalances = (pool: Pool) => {
+    // If no pool assets but has TVL, use that for main asset calculation
+    if (!pool.pool_assets || pool.pool_assets.length === 0) {
+      const mainAssetBalance = pool.total_value_locked / pool.main_asset.price_per_token;
+      
+      return {
+        mainAssetBalance,
+        debtAssets: [],
+        totalDebtValue: 0,
+        totalValueLocked: pool.total_value_locked
+      };
+    }
+
+    // Normal calculation for pools with assets
+    const mainAssetBalance = pool.pool_assets?.find(
+      pa => pa.asset.id === pool.main_asset.id
+    )?.balance || 0;
+
+    // Only count non-main assets with balance > 0 as debt assets
+    const debtAssets = pool.pool_assets?.filter(
+      pa => pa.asset.id !== pool.main_asset.id && pa.balance > 0
+    ) || [];
+
+    // Calculate main asset value
+    const mainAssetValue = mainAssetBalance * pool.main_asset.price_per_token;
+
+    // Calculate total debt value
+    const totalDebtValue = debtAssets.reduce((sum, pa) => 
+      sum + (pa.balance * pa.asset.price_per_token), 0
+    );
+
+    // Total Value Locked is sum of main asset value and debt assets value
+    const totalValueLocked = mainAssetValue + totalDebtValue;
+
+    return {
+      mainAssetBalance,
+      debtAssets,
+      totalDebtValue,
+      totalValueLocked
+    };
+  };
+
+  const calculatePoolRatios = (pool: Pool, mainAssetBalance: number, debtAssets: any[]) => {
+    const mainAssetValue = mainAssetBalance * pool.main_asset.price_per_token;
+    const debtAssetsValue = debtAssets.reduce((sum, pa) => 
+      sum + (pa.balance * pa.asset.price_per_token), 0
+    );
+    
+    const total = mainAssetValue + debtAssetsValue;
+    return {
+      mainAssetRatio: total > 0 ? (mainAssetValue / total) * 100 : 100,
+      debtAssetsRatio: total > 0 ? (debtAssetsValue / total) * 100 : 0
+    };
+  };
+
+  const syncPoolBalances = async () => {
+    try {
+      // Get all staked assets (BTCX and HONEYX balances)
+      const { data: stakedBalances, error: stakedError } = await supabase
+        .from('user_balances')
+        .select(`
+          asset_id,
+          balance,
+          assets!inner (
+            symbol,
+            price_per_token
+          )
+        `)
+        .in('assets.symbol', ['BTCX', 'HONEYX']);
+
+      if (stakedError) throw stakedError;
+
+      // Group staked balances by asset
+      const totalStaked = stakedBalances?.reduce((acc, balance) => {
+        const isHoney = balance.assets.symbol === 'HONEYX';
+        const poolType = isHoney ? 'honey' : 'bitcoin';
+        const mainAssetSymbol = isHoney ? 'HONEY' : 'BTC';
+
+        if (!acc[poolType]) {
+          acc[poolType] = {
+            total: 0,
+            mainAssetSymbol
+          };
+        }
+        acc[poolType].total += balance.balance;
+        return acc;
+      }, {} as Record<string, { total: number, mainAssetSymbol: string }>);
+
+      // For each pool, ensure pool_assets reflects total staked amount
+      for (const [poolType, staked] of Object.entries(totalStaked)) {
+        const { data: pool } = await supabase
+          .from('pools')
+          .select('id, main_asset:assets!pools_main_asset_id_fkey (id, price_per_token)')
+          .eq('type', poolType)
+          .single();
+
+        if (pool) {
+          // Update or insert pool_assets record
+          await supabase
+            .from('pool_assets')
+            .upsert({
+              pool_id: pool.id,
+              asset_id: pool.main_asset.id,
+              balance: staked.total
+            }, {
+              onConflict: 'pool_id,asset_id',
+              ignoreDuplicates: false
+            });
+
+          // Update pool's TVL
+          await supabase
+            .from('pools')
+            .update({
+              total_value_locked: staked.total * pool.main_asset.price_per_token
+            })
+            .eq('id', pool.id);
+        }
+      }
+    } catch (err) {
+      console.error('Error syncing pool balances:', err);
+    }
+  };
+
+  // Call this function when component mounts and after any staking/unstaking
+  useEffect(() => {
+    syncPoolBalances();
+  }, [refreshTrigger]);
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
@@ -167,20 +311,9 @@ export const LiquidReserve: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {pools.map(pool => {
-          // Calculate main asset balance and value
-          const mainAssetBalance = pool.total_value_locked / pool.main_asset.price_per_token;
-          const mainAssetValue = pool.total_value_locked;
-
-          // Calculate total debt assets value
-          const debtAssetsValue = pool.pool_assets?.reduce((sum, pa) => 
-            sum + (pa.balance * pa.asset.price_per_token), 0) || 0;
-
-          // Calculate total pool value (main asset + debt assets)
-          const totalPoolValue = mainAssetValue + debtAssetsValue;
-
-          // Calculate percentages for the bar
-          const mainAssetPercentage = (mainAssetValue / totalPoolValue) * 100;
-          const debtAssetsPercentage = (debtAssetsValue / totalPoolValue) * 100;
+          const { mainAssetBalance, debtAssets, totalDebtValue, totalValueLocked } = calculatePoolBalances(pool);
+          const hasDebtAssets = debtAssets.length > 0;
+          const { mainAssetRatio, debtAssetsRatio } = calculatePoolRatios(pool, mainAssetBalance, debtAssets);
 
           return (
             <div key={pool.id} className="bg-[#1A1A1A] rounded-xl border border-light/10 p-6">
@@ -212,7 +345,11 @@ export const LiquidReserve: React.FC = () => {
                     ? setShowBitcoinStakingModal(true) 
                     : setShowHoneyStakingModal(true)
                   }
-                  className="bg-[#00D54B] text-dark px-4 py-2 rounded-xl font-medium hover:bg-[#00D54B]/90 transition-colors"
+                  className={`text-dark font-medium py-2 px-6 rounded-xl hover:opacity-90 transition-colors ${
+                    pool.type === 'bitcoin'
+                      ? 'bg-gradient-to-r from-[#F7931A] to-[#FFAB4A]'
+                      : 'bg-gradient-to-r from-[#FFD700] to-[#FFA500]'
+                  }`}
                 >
                   Add liquidity
                 </button>
@@ -222,66 +359,64 @@ export const LiquidReserve: React.FC = () => {
               <div className="mb-6">
                 <div className="text-sm text-light/60 mb-1">Total Value Locked</div>
                 <div className="text-2xl font-medium text-light">
-                  {formatCurrency(totalPoolValue)}
+                  {formatCurrency(totalValueLocked)}
                 </div>
               </div>
 
               {/* Pool Balances */}
-              <div className="space-y-4">
-                <div className="text-sm text-light/60">Pool Balances</div>
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-light">
-                      {mainAssetBalance.toFixed(pool.type === 'bitcoin' ? 8 : 2)} {pool.type === 'bitcoin' ? 'BTC' : 'HONEY'}
-                    </span>
-                    {debtAssetsValue > 0 && (
-                      <span className="text-light">
-                        {formatCurrency(debtAssetsValue)} Debt Assets
-                      </span>
+              <div className="mt-6">
+                <h3 className="text-light/60 mb-2">Pool Balances</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-base font-medium">
+                    <span>{Number(mainAssetBalance).toFixed(pool.type === 'bitcoin' ? 8 : 2)} {pool.main_asset.symbol}</span>
+                    {hasDebtAssets && (
+                      <span>{formatCurrency(totalDebtValue)} Debt Assets</span>
                     )}
                   </div>
-                  <div className="h-2 bg-light/10 rounded-full overflow-hidden flex">
-                    {/* Main asset portion */}
-                    <div 
-                      className="h-full"
-                      style={{ 
-                        width: `${mainAssetPercentage}%`,
-                        background: pool.type === 'bitcoin' 
-                          ? 'linear-gradient(90deg, #F7931A 0%, #FFAB4A 100%)'
-                          : `url(${getAssetIcon('honey')})`,
-                        backgroundSize: 'cover'
-                      }}
-                    />
-                    {/* Small divider if there are debt assets */}
-                    {debtAssetsValue > 0 && (
-                      <div className="h-full w-[2px] bg-[#1A1A1A]" />
-                    )}
-                    {/* Debt assets portion */}
-                    {debtAssetsValue > 0 && (
-                      <div 
+                  <div className="relative">
+                    <div className="flex bg-dark-3 rounded-full h-2 overflow-hidden">
+                      {/* Main asset portion */}
+                      <div
                         className="h-full"
-                        style={{ 
-                          width: `${debtAssetsPercentage}%`,
-                          background: 'linear-gradient(90deg, #00D54B 0%, #00FF5B 100%)'
+                        style={{
+                          width: `${mainAssetRatio}%`,
+                          background: pool.type === 'bitcoin' 
+                            ? 'linear-gradient(90deg, #F7931A 0%, #FFAB4A 100%)'
+                            : 'linear-gradient(90deg, #FFD700 0%, #FFA500 100%)'
                         }}
                       />
-                    )}
+                      {/* Debt assets portion */}
+                      {hasDebtAssets && (
+                        <>
+                          <div className="h-full w-[2px] bg-[#1A1A1A]" />
+                          <div 
+                            className="h-full"
+                            style={{ 
+                              width: `${debtAssetsRatio}%`,
+                              background: 'linear-gradient(90deg, #00D54B 0%, #00FF5B 100%)'
+                            }}
+                          />
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-                
-                {/* Debt asset holdings */}
-                {pool.pool_assets && pool.pool_assets.length > 0 && (
-                  <div className="mt-4">
-                    <div className="text-sm text-light/60 mb-2">Debt Asset Holdings</div>
-                    {pool.pool_assets.map(pa => (
-                      <div key={pa.asset.symbol} className="flex justify-between text-sm">
-                        <span className="text-gray-400">{pa.asset.symbol}</span>
-                        <span className="text-light">{pa.balance.toFixed(2)}</span>
+              </div>
+
+              {/* Debt Asset Holdings - Only show if there are debt assets */}
+              {hasDebtAssets && (
+                <div className="mt-6">
+                  <h3 className="text-light/60 mb-2">Debt Asset Holdings</h3>
+                  <div className="space-y-2">
+                    {debtAssets.map(pa => (
+                      <div key={pa.asset.id} className="flex justify-between">
+                        <span>{pa.asset.symbol}</span>
+                        <span>{formatCurrency(pa.balance * pa.asset.price_per_token)}</span>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           );
         })}

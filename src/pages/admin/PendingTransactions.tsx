@@ -26,6 +26,9 @@ interface PoolImpact {
   poolReduction: number;
   userTokens: number;
   pricePerToken: number;
+  isBuy: boolean;
+  fromPool: number;
+  fromOffering: number;
 }
 
 export const PendingTransactions: React.FC = () => {
@@ -37,6 +40,7 @@ export const PendingTransactions: React.FC = () => {
   const [poolImpact, setPoolImpact] = useState<PoolImpact | null>(null);
   const [adminPrice, setAdminPrice] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
 
   const fetchTransactions = async () => {
     try {
@@ -44,6 +48,7 @@ export const PendingTransactions: React.FC = () => {
       const { data, error } = await adminSupabase
         .from('admin_transactions')
         .select('*')
+        .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -55,7 +60,8 @@ export const PendingTransactions: React.FC = () => {
         data?.map(t => ({
           id: t.id,
           type: t.type,
-          payment_method: t.payment_method
+          payment_method: t.payment_method,
+          status: t.status
         }))
       );
       setTransactions(data || []);
@@ -86,6 +92,15 @@ export const PendingTransactions: React.FC = () => {
             symbol,
             name,
             price_per_token
+          ),
+          pool_assets (
+            balance,
+            asset:assets (
+              id,
+              symbol,
+              name,
+              price_per_token
+            )
           )
         `);
       setPools(poolsData || []);
@@ -96,51 +111,57 @@ export const PendingTransactions: React.FC = () => {
 
   const handleAction = async (transactionId: string, action: 'approve' | 'reject') => {
     try {
+      const transaction = transactions.find(t => t.id === transactionId);
+      if (!transaction) {
+        throw new Error('Transaction not found');
+      }
+
       if (action === 'approve') {
-        if (!selectedPool) {
-          setError('Please select a pool first');
+        const isDirectSale = ['BTC', 'HONEY'].includes(transaction.asset_symbol);
+        if (!isDirectSale && !selectedPool) {
+          toast.error('Please select a pool');
           return;
         }
 
         if (!adminPrice) {
-          setError('Please input price per token');
-          return;
-        }
-
-        if (!poolImpact) {
-          setError('Pool impact calculation failed');
+          toast.error('Please enter a price');
           return;
         }
 
         setIsSubmitting(true);
-        
-        const params = {
-          transactionId,
-          poolId: selectedPool.id,
-          pricePerToken: adminPrice,
-          poolReduction: poolImpact.poolReduction,
-          userTokens: poolImpact.userTokens
-        };
 
-        console.log('Starting transaction approval with full params:', params);
-        console.log('Pool details:', selectedPool);
-        console.log('Pool impact details:', poolImpact);
+        if (transaction.type === 'buy') {
+          const { error } = await adminSupabase.rpc('process_buy_transaction', {
+            p_transaction_id: transactionId,
+            p_pool_id: selectedPool?.id,
+            p_price_per_token: adminPrice,
+            p_amount: transaction.amount
+          });
+          if (error) throw error;
+        } else {
+          // Calculate USD value upfront for sell transactions
+          const usdValue = transaction.amount * adminPrice;
+          const poolReduction = isDirectSale ? 0 : usdValue / selectedPool.main_asset.price_per_token;
 
-        try {
-          const result = await transactionService.approveSellTransaction(params);
-          console.log('Transaction approval result:', result);
-          
-          console.log('Fetching updated transaction data...');
-          await fetchTransactions();
-          console.log('Transaction data refreshed');
-          
-          toast.success('Transaction approved successfully');
-        } catch (approvalError) {
-          console.error('Detailed error in approval:', approvalError);
-          throw approvalError;
+          const { error } = await adminSupabase.rpc('process_sell_transaction', {
+            p_transaction_id: transactionId,
+            p_pool_id: isDirectSale ? null : selectedPool.id,
+            p_price_per_token: adminPrice,
+            p_pool_reduction: poolReduction,
+            p_user_tokens: transaction.amount,
+            p_usd_value: usdValue
+          });
+          if (error) throw error;
         }
+
+        await fetchTransactions();
+        toast.success('Transaction approved successfully');
       } else {
+        setIsSubmitting(true);
         await transactionService.rejectTransaction(transactionId);
+        if (selectedTransaction?.id === transactionId) {
+          setSelectedTransaction(null);
+        }
         await fetchTransactions();
         toast.success('Transaction rejected');
       }
@@ -158,41 +179,227 @@ export const PendingTransactions: React.FC = () => {
     return format(new Date(dateString), 'MMM d, yyyy, h:mm a');
   };
 
-  const calculatePoolImpact = (transaction: Transaction, pool: Pool, pricePerToken: number) => {
+  const calculatePoolImpact = (
+    transaction: Transaction, 
+    pool: Pool, 
+    pricePerToken: number, 
+    fromPool: number, 
+    fromOffering: number
+  ) => {
+    // Calculate the total payment amount
+    const paymentAmount = transaction.amount * pricePerToken;
+
+    // For sell transactions, calculate how much of the main asset (BTC/HONEY) the pool needs to pay
+    const mainAssetAmount = transaction.type === 'sell' 
+      ? paymentAmount / pool.main_asset.price_per_token 
+      : fromPool * pricePerToken;
+
     const impact: PoolImpact = {
-      poolReduction: transaction.amount * pricePerToken,
-      userTokens: (transaction.amount * pricePerToken) / pool.main_asset.price_per_token,
-      pricePerToken
+      poolReduction: mainAssetAmount,
+      userTokens: mainAssetAmount,
+      pricePerToken,
+      isBuy: transaction.type === 'buy',
+      fromPool,
+      fromOffering
     };
+
+    console.log('Pool Impact Calculation:', {
+      transaction,
+      paymentAmount,
+      mainAssetAmount,
+      impact
+    });
+
     setPoolImpact(impact);
   };
 
+  const findAvailablePools = (transaction: Transaction) => {
+    return pools.filter(pool => {
+      const poolAssets = pool.pool_assets || [];
+      const hasAsset = poolAssets.some(pa => 
+        pa.asset.id === transaction.asset_id && pa.balance > 0
+      );
+      return hasAsset;
+    });
+  };
+
+  const renderTransactionRow = (transaction: Transaction) => (
+    <>
+      <div 
+        key={transaction.id} 
+        className={`grid grid-cols-[2fr,1fr,1fr,1.5fr,1fr,1fr] gap-3 items-center py-3 cursor-pointer hover:bg-light/5 ${
+          selectedTransaction?.id === transaction.id ? 'bg-light/10' : ''
+        }`}
+        onClick={() => setSelectedTransaction(transaction)}
+      >
+        <div className="text-light">{transaction.user_email}</div>
+        <div className="capitalize">
+          {transaction.type === 'deposit' ? (
+            <span className="text-[#00D897]">Deposit</span>
+          ) : transaction.type === 'withdraw' ? (
+            <span className="text-yellow-500">Withdraw</span>
+          ) : (
+            <div>
+              <span>{transaction.type}</span>
+              {transaction.type === 'buy' && (
+                <div className="text-xs text-light/60 mt-0.5">
+                  {transaction.payment_method === 'usd_balance' ? 'USD Balance' :
+                   transaction.payment_method === 'bank_account' ? 'Bank Account' : 
+                   'USDC'}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="text-light">{transaction.asset_symbol}</div>
+        <div>
+          <div className="text-light">
+            ${(transaction.amount * (
+              transaction.type === 'sell' && transaction.asset_symbol === 'BTC' 
+                ? transaction.price_per_token 
+                : transaction.price_per_token
+            )).toLocaleString()}
+          </div>
+          <div className="text-sm text-light/60">
+            {transaction.amount} {transaction.asset_symbol}
+          </div>
+        </div>
+        <div className="text-sm text-light/60">
+          {format(new Date(transaction.created_at), 'MMM d, h:mm a')}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleAction(transaction.id, 'approve');
+            }}
+            disabled={isSubmitting}
+            className="bg-[#00D54B] text-dark px-3 py-1 rounded-lg text-sm font-medium hover:bg-[#00D54B]/90 disabled:opacity-50"
+          >
+            {isSubmitting ? 'Processing...' : 'Approve'}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleAction(transaction.id, 'reject');
+            }}
+            className="bg-light/10 text-light px-3 py-1 rounded-lg text-sm font-medium hover:bg-light/20"
+          >
+            Reject
+          </button>
+        </div>
+      </div>
+      {selectedTransaction?.id === transaction.id && (
+        <div className="bg-dark-2 p-4 rounded-lg mb-4">
+          {renderPoolSelection(selectedTransaction)}
+        </div>
+      )}
+    </>
+  );
+
   const renderPoolSelection = (transaction: Transaction) => {
-    if (transaction.type !== 'sell') return null;
+    if (!transaction) return null;
+
+    const isDebtAsset = transaction.asset_symbol.startsWith('DEBT');
+    const isDirectSale = ['BTC', 'HONEY'].includes(transaction.asset_symbol);
+
+    // For selling BTC/HONEY, show only price input
+    if (transaction.type === 'sell' && isDirectSale) {
+      return (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              Input Agreed Price per Token
+            </label>
+            <input
+              type="number"
+              className="w-full bg-[#1A1A1A] text-light rounded-lg p-2 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary"
+              value={adminPrice || ''}
+              onChange={(e) => setAdminPrice(parseFloat(e.target.value))}
+              placeholder="Enter price per token"
+              min="0"
+              step="0.01"
+            />
+          </div>
+        </div>
+      );
+    }
+
+    const availablePools = transaction.type === 'buy' 
+      ? findAvailablePools(transaction)
+      : pools.filter(pool => {
+          // For selling DEBT assets, show all pools that can accept debt assets
+          return transaction.asset_symbol.startsWith('DEBT');
+        });
+
+    // If no pools available for buy, or no pools can accept this DEBT asset for sell
+    if (availablePools.length === 0) {
+      return (
+        <div className="space-y-4">
+          <div className="text-sm text-yellow-500 mb-4">
+            {transaction.type === 'buy' 
+              ? "No pools have this asset. Transaction will be processed as a direct offering."
+              : "No pools available to accept this asset."}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              Input Agreed Price per Token
+            </label>
+            <input
+              type="number"
+              className="w-full bg-[#1A1A1A] text-light rounded-lg p-2 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary"
+              value={adminPrice || ''}
+              onChange={(e) => setAdminPrice(parseFloat(e.target.value))}
+              placeholder="Enter price per token"
+              min="0"
+              step="0.01"
+            />
+          </div>
+        </div>
+      );
+    }
 
     return (
-      <div className="space-y-4 mt-4">
+      <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-400 mb-2">
-            Select Pool for Payment
+            Select Pool for {transaction.type === 'buy' ? 'Asset Source' : 'Payment'}
           </label>
           <select
-            className="w-full bg-[#1A1A1A] text-light rounded-lg p-2 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary"
+            className="w-full bg-[#1A1A1A] text-light rounded-lg p-2 border border-gray-700"
             value={selectedPool?.id || ''}
             onChange={(e) => {
               const pool = pools.find(p => p.id === e.target.value);
               setSelectedPool(pool || null);
+              
               if (pool && adminPrice) {
-                calculatePoolImpact(transaction, pool, adminPrice);
+                const poolAsset = pool.pool_assets?.find(pa => 
+                  pa.asset.id === transaction.asset_id
+                );
+                
+                const availableInPool = Number(poolAsset?.balance) || 0;
+                const transactionAmount = Number(transaction.amount) || 0;
+                
+                const fromPool = Math.min(availableInPool, transactionAmount);
+                const fromOffering = Math.max(0, transactionAmount - fromPool);
+                
+                calculatePoolImpact(transaction, pool, adminPrice, fromPool, fromOffering);
               }
             }}
           >
-            <option value="" className="bg-[#1A1A1A]">Select a pool</option>
-            {pools.map(pool => (
-              <option key={pool.id} value={pool.id} className="bg-[#1A1A1A]">
-                {pool.type === 'bitcoin' ? 'Bitcoin' : 'Honey'} Pool - TVL: {formatCurrency(pool.total_value_locked)}
-              </option>
-            ))}
+            <option value="">Select a pool</option>
+            {availablePools.map(pool => {
+              const poolAsset = pool.pool_assets?.find(pa => 
+                pa.asset.id === transaction.asset_id
+              );
+              const availableAmount = poolAsset?.balance || 0;
+              return (
+                <option key={pool.id} value={pool.id}>
+                  {pool.type === 'bitcoin' ? 'Bitcoin' : 'Honey'} Pool 
+                  (Has {availableAmount} {transaction.asset_symbol})
+                </option>
+              );
+            })}
           </select>
         </div>
 
@@ -208,7 +415,14 @@ export const PendingTransactions: React.FC = () => {
               const price = parseFloat(e.target.value);
               setAdminPrice(price);
               if (selectedPool && !isNaN(price)) {
-                calculatePoolImpact(transaction, selectedPool, price);
+                const poolAsset = selectedPool.pool_assets?.find(pa => 
+                  pa.asset.id === transaction.asset_id
+                );
+                const availableInPool = Number(poolAsset?.balance) || 0;
+                const transactionAmount = Number(transaction.amount) || 0;
+                const fromPool = Math.min(availableInPool, transactionAmount);
+                const fromOffering = Math.max(0, transactionAmount - fromPool);
+                calculatePoolImpact(transaction, selectedPool, price, fromPool, fromOffering);
               }
             }}
             placeholder="Enter price per token"
@@ -220,17 +434,45 @@ export const PendingTransactions: React.FC = () => {
         {poolImpact && selectedPool && (
           <div className="bg-dark-3 rounded-lg p-4 space-y-2">
             <h4 className="font-medium text-light">Transaction Impact Preview</h4>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Pool TVL Reduction</span>
-              <span className="text-light">{formatCurrency(poolImpact.poolReduction)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">User Will Receive</span>
-              <span className="text-light">{formatCurrency(poolImpact.poolReduction)}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Pool Will Receive</span>
-              <span className="text-light">{transaction.amount} {transaction.asset_symbol}</span>
+            <div className="text-sm space-y-2">
+              <div className="text-gray-400">Pool Balances:</div>
+              {transaction.type === 'buy' ? (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-green-400">
+                      + {formatCurrency(poolImpact.poolReduction)} in {selectedPool.main_asset.symbol}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-red-400">
+                      - {Number(poolImpact.fromPool).toLocaleString()} {transaction.asset_symbol}
+                    </span>
+                  </div>
+                  {poolImpact.fromOffering > 0 && (
+                    <div className="mt-2">
+                      <div className="text-gray-400">From Direct Offering:</div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-blue-400">
+                          + {Number(poolImpact.fromOffering).toLocaleString()} {transaction.asset_symbol}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-green-400">
+                      + {transaction.amount} {transaction.asset_symbol} (+{formatCurrency(transaction.amount * adminPrice)} USD)
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-red-400">
+                      - {Number(poolImpact.poolReduction).toFixed(selectedPool.type === 'bitcoin' ? 8 : 2)} {selectedPool.main_asset.symbol} (-{formatCurrency(poolImpact.poolReduction * selectedPool.main_asset.price_per_token)} USD)
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -269,58 +511,9 @@ export const PendingTransactions: React.FC = () => {
             No pending transactions
           </div>
         ) : (
-          transactions.map((transaction) => (
-            <div key={transaction.id} className="grid grid-cols-[2fr,1fr,1fr,1.5fr,1fr,1fr] gap-3 items-center py-3">
-              <div className="text-light">{transaction.user_email}</div>
-              <div className="capitalize">
-                {transaction.type === 'deposit' ? (
-                  <span className="text-[#00D897]">Deposit</span>
-                ) : transaction.type === 'withdraw' ? (
-                  <span className="text-yellow-500">Withdraw</span>
-                ) : (
-                  <div>
-                    <span>{transaction.type}</span>
-                    {transaction.type === 'buy' && (
-                      <div className="text-xs text-light/60 mt-0.5">
-                        {transaction.payment_method === 'usd_balance' ? 'USD Balance' :
-                         transaction.payment_method === 'bank_account' ? 'Bank Account' : 
-                         'USDC'}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="text-light">{transaction.asset_symbol}</div>
-              <div>
-                <div className="text-light">${(transaction.amount * transaction.price_per_token).toLocaleString()}</div>
-                <div className="text-sm text-light/60">
-                  {transaction.amount} {transaction.asset_symbol}
-                </div>
-              </div>
-              <div className="text-sm text-light/60">
-                {format(new Date(transaction.created_at), 'MMM d, h:mm a')}
-              </div>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => handleAction(transaction.id, 'approve')}
-                  disabled={isSubmitting}
-                  className="bg-[#00D54B] text-dark px-3 py-1 rounded-lg text-sm font-medium hover:bg-[#00D54B]/90 disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Processing...' : 'Approve'}
-                </button>
-                <button
-                  onClick={() => handleAction(transaction.id, 'reject')}
-                  className="bg-light/10 text-light px-3 py-1 rounded-lg text-sm font-medium hover:bg-light/20"
-                >
-                  Reject
-                </button>
-              </div>
-            </div>
-          ))
+          transactions.map(renderTransactionRow)
         )}
       </div>
-
-      {transactions.length > 0 && renderPoolSelection(transactions[0])}
     </div>
   );
 }; 

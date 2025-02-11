@@ -21,6 +21,28 @@ interface ApproveSellTransactionParams {
   userTokens: number;
 }
 
+interface CreateBuyTransactionParams {
+  userId: string;
+  assetId: string;
+  amount: number;
+  pricePerToken: number;
+  paymentMethod: 'usd_balance' | 'bank_account' | 'usdc';
+}
+
+interface ApproveBuyTransactionParams {
+  transactionId: string;
+  poolId: string;
+  pricePerToken: number;
+  paymentAmount: number;
+}
+
+interface CreateSellTransactionParams {
+  userId: string;
+  assetId: string;
+  amount: number;
+  pricePerToken: number;
+}
+
 export const transactionService = {
   async verifyAsset(assetId: string): Promise<boolean> {
     console.log('Verifying asset with ID:', assetId);
@@ -889,5 +911,194 @@ export const transactionService = {
       console.error('Error in approveSellTransaction:', err);
       throw err;
     }
-  }
+  },
+
+  async approveBuyTransaction({
+    transactionId,
+    poolId,
+    pricePerToken,
+    paymentAmount
+  }: ApproveBuyTransactionParams) {
+    try {
+      console.log('Calling process_buy_transaction with params:', {
+        p_transaction_id: transactionId,
+        p_pool_id: poolId,
+        p_price_per_token: pricePerToken,
+        p_payment_amount: paymentAmount
+      });
+
+      const { data, error } = await adminSupabase.rpc('process_buy_transaction', {
+        p_transaction_id: transactionId,
+        p_pool_id: poolId,
+        p_price_per_token: pricePerToken,
+        p_payment_amount: paymentAmount
+      });
+
+      if (error) {
+        console.error('Detailed error from process_buy_transaction:', error);
+        throw new Error(`Failed to approve buy transaction: ${error.message}`);
+      }
+
+      return data;
+    } catch (err) {
+      console.error('Error in approveBuyTransaction:', err);
+      throw err;
+    }
+  },
+
+  async createBuyTransaction({
+    userId,
+    assetId,
+    amount,
+    pricePerToken,
+    paymentMethod
+  }: CreateBuyTransactionParams) {
+    try {
+      // Create the transaction record with correct initial status
+      const { data: transaction, error } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: userId,
+          asset_id: assetId,
+          type: 'buy',
+          amount,
+          price_per_token: pricePerToken,
+          payment_method: paymentMethod,
+          status: 'pending', // Always start as pending
+          metadata: {}
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // If using USD balance, process immediately
+      if (paymentMethod === 'usd_balance') {
+        const { data: processResult, error: processError } = await supabase.rpc(
+          'process_buy_transaction',
+          {
+            p_transaction_id: transaction.id,
+            p_price_per_token: pricePerToken,
+            p_payment_amount: amount * pricePerToken
+          }
+        );
+
+        if (processError) {
+          console.error('Error processing buy transaction:', processError);
+          throw processError;
+        }
+      }
+
+      return transaction;
+    } catch (err) {
+      console.error('Error creating buy transaction:', err);
+      throw err;
+    }
+  },
+
+  async rejectTransaction(transactionId: string): Promise<void> {
+    try {
+      console.log('Attempting to reject transaction:', transactionId);
+      const { error } = await adminSupabase
+        .from('transactions')
+        .update({
+          status: 'cancelled',
+          updated_at: new Date().toISOString(),
+          cancelled_at: new Date().toISOString()
+        })
+        .eq('id', transactionId);
+
+      console.log('Rejection response error:', error);
+
+      if (error) {
+        console.error('Error rejecting transaction:', error);
+        throw new TransactionError(
+          'Failed to reject transaction',
+          'REJECT_ERROR',
+          error.message
+        );
+      }
+      console.log('Successfully rejected transaction:', transactionId);
+    } catch (err) {
+      console.error('Error in rejectTransaction:', err);
+      if (err instanceof TransactionError) throw err;
+      throw new TransactionError(
+        'Failed to reject transaction',
+        'UNKNOWN_ERROR',
+        err instanceof Error ? err.message : 'Unknown error'
+      );
+    }
+  },
+
+  async createSellTransaction({
+    userId,
+    assetId,
+    amount,
+    pricePerToken
+  }: CreateSellTransactionParams) {
+    try {
+      // First verify the session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        throw new TransactionError(
+          'Authentication error',
+          'AUTH_ERROR',
+          'Please sign in again'
+        );
+      }
+      
+      if (!session) {
+        console.error('No active session found');
+        throw new TransactionError(
+          'No active session',
+          'AUTH_ERROR',
+          'Please sign in again'
+        );
+      }
+
+      // Get profile using email to ensure correct user context
+      const { data: profile, error: profileError } = await supabase.rpc(
+        'get_profile_by_email',
+        { p_email: session.user.email }
+      );
+
+      if (profileError || !profile) {
+        console.error('Profile fetch error:', profileError);
+        throw new TransactionError(
+          'Profile error',
+          'PROFILE_ERROR',
+          'Failed to verify user profile'
+        );
+      }
+
+      // Create the transaction record
+      const { data: transaction, error } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: profile.user_id,
+          asset_id: assetId,
+          type: 'sell',
+          amount,
+          price_per_token: pricePerToken,
+          status: 'pending',
+          metadata: {
+            fee_usd: amount * pricePerToken * 0.005,  // 0.5% fee
+            reference: Date.now().toString(),
+            payment_method: 'USD'
+          }
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+      return transaction;
+    } catch (err) {
+      console.error('Error creating sell transaction:', err);
+      throw err;
+    }
+  },
 }; 

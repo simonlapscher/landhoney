@@ -36,7 +36,7 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose, userBala
 
   // Calculate fees and totals
   const numericAmount = parseFloat(amount) || 0;
-  const tokenAmount = numericAmount / asset.price_per_token;
+  const tokenAmount = numericAmount / asset.price_per_token;  // Always convert USD to token amount
   const usdAmount = numericAmount * asset.price_per_token;
   const platformFee = usdAmount * 0.005; // 0.5% of USD amount
   const totalAmount = usdAmount - platformFee;
@@ -48,7 +48,7 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose, userBala
       return false;
     }
 
-    if (numericAmount > userBalance) {
+    if (tokenAmount > userBalance) {  // Compare BTC amounts
       setValidationError('Amount exceeds your balance');
       return false;
     }
@@ -67,17 +67,14 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose, userBala
 
     try {
       setIsSubmitting(true);
-      const response = await transactionService.createTransaction(
-        asset.id,
-        usdAmount,
-        tokenAmount,
-        platformFee,
-        paymentMethod,
-        asset.price_per_token,
-        'sell'
-      );
+      const result = await transactionService.createSellTransaction({
+        userId: '',  // This will be ignored since we get it from session
+        assetId: asset.id,
+        amount: tokenAmount,
+        pricePerToken: asset.price_per_token
+      });
 
-      setTransaction(response);
+      setTransaction(result);
       setShowSuccess(true);
       setWidgetState('confirmation');
     } catch (err) {
@@ -114,7 +111,7 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose, userBala
           </div>
 
           <div className="bg-[#1A1A1A] rounded-lg p-4 mb-6">
-            <h4 className="text-left mb-4">Order Summary - Sell {amount} {asset.symbol}</h4>
+            <h4 className="text-left mb-4">Order Summary - Sell {tokenAmount.toFixed(8)} {asset.symbol}</h4>
             
             <div className="space-y-3">
               <div className="flex justify-between">
@@ -220,7 +217,7 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose, userBala
                         } else {
                           const usdAmount = Number(value);
                           if (!isNaN(usdAmount)) {
-                            setAmount((usdAmount / asset.price_per_token).toString());
+                            setAmount(usdAmount.toString());  // Store USD amount directly
                           }
                         }
                       }
@@ -233,7 +230,7 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose, userBala
                   />
                 </div>
                 <div className="text-gray-400 mt-2">
-                  {Number(amount || 0).toFixed(8)} {asset.symbol}
+                  {tokenAmount.toFixed(8)} {asset.symbol}
                 </div>
 
                 {/* Price per token */}
@@ -285,7 +282,7 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose, userBala
                 </div>
 
                 {/* Add balance error message */}
-                {Number(amount) > userBalance && (
+                {tokenAmount > userBalance && (
                   <div className="border border-red-500/20 bg-red-500/10 text-red-500 p-4 rounded-xl text-sm">
                     This amount exceeds your balance. Reduce the selling amount.
                   </div>

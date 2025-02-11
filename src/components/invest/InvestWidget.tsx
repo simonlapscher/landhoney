@@ -9,16 +9,18 @@ import { useAuth } from '../../lib/context/AuthContext';
 import { Transaction } from '../../lib/types/transaction';
 import { useBalances } from '../../lib/hooks/useBalances';
 import { formatCurrency } from '../../lib/utils/formatters';
+import { toast } from 'react-hot-toast';
 
 interface InvestWidgetProps {
   asset: Asset;
   onClose: () => void;
   userBalance?: number;
+  onSuccess?: () => void;
 }
 
 type WidgetState = 'input' | 'review' | 'confirmation' | 'payment_instructions';
 
-export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, userBalance = 0 }) => {
+export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, userBalance = 0, onSuccess }) => {
   // Input state
   const [amount, setAmount] = useState<string>('');
   const [amountType, setAmountType] = useState<'USD' | 'Token'>('USD');
@@ -33,6 +35,7 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
   const { balances } = useBalances();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('usd_balance');
   const [inputError, setInputError] = useState<string | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
   
   // Get USD balance
   const usdBalance = balances?.find(b => b.asset.symbol === 'USD')?.balance || 0;
@@ -82,7 +85,8 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
     }
   }, [usdAmount, usdBalance, paymentMethod]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (inputError) return;
 
     // If in input state, move to review state
@@ -92,44 +96,50 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
     }
 
     // Otherwise, proceed with transaction
+    setIsSubmitting(true);
+    setValidationError(null);
+
     try {
-      setIsSubmitting(true);
-      setValidationError(null);
-      
-      if (!originalUser) {
+      if (!user) {
         throw new Error('Please sign in to invest');
       }
 
       // If bank account payment, show payment instructions
       if (paymentMethod === 'bank_account') {
-        const newTransaction = await transactionService.createTransaction(
-          asset.id,
-          usdAmount,
-          tokenAmount,
-          platformFee,
-          'bank_account',
-          asset.price_per_token
-        );
-        setTransaction(newTransaction);
+        const transaction = await transactionService.createBuyTransaction({
+          userId: user.id,
+          assetId: asset.id,
+          amount: tokenAmount,
+          pricePerToken: asset.price_per_token,
+          paymentMethod: 'bank_account'
+        });
+        setTransaction(transaction);
         setWidgetState('payment_instructions');
         return;
       }
 
       // For USD balance or USDC payments
-      const newTransaction = await transactionService.createTransaction(
-        asset.id,
-        usdAmount,
-        tokenAmount,
-        platformFee,
-        paymentMethod,
-        asset.price_per_token
-      );
-      
-      setTransaction(newTransaction);
+      const transaction = await transactionService.createBuyTransaction({
+        userId: user.id,
+        assetId: asset.id,
+        amount: tokenAmount,
+        pricePerToken: asset.price_per_token,
+        paymentMethod: paymentMethod
+      });
+
+      setTransaction(transaction);
       setWidgetState('confirmation');
+      
+      if (paymentMethod === 'usd_balance') {
+        toast.success('Purchase successful!');
+        onSuccess?.();
+      } else {
+        toast.success('Purchase request submitted for approval');
+      }
+
     } catch (err) {
-      console.error('Error creating transaction:', err);
-      setValidationError(err instanceof Error ? err.message : 'Failed to create transaction. Please try again.');
+      console.error('Error processing purchase:', err);
+      setValidationError(err instanceof Error ? err.message : 'Failed to process purchase');
     } finally {
       setIsSubmitting(false);
     }
@@ -455,8 +465,13 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
           <h3 className="text-lg font-bold text-light mb-4">You're Paying With</h3>
           <div className="relative">
             <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+              value={selectedPaymentMethod || paymentMethod}
+              onChange={(e) => {
+                if (e.target.value === 'usd_balance') {
+                  setSelectedPaymentMethod(null);
+                }
+                setPaymentMethod(e.target.value as PaymentMethod);
+              }}
               disabled={widgetState === 'review'}
               className="w-full appearance-none bg-light/10 text-light pl-4 pr-12 py-3 rounded-full focus:outline-none focus:ring-2 focus:ring-primary"
             >
