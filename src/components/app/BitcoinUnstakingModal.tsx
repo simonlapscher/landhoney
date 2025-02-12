@@ -68,31 +68,18 @@ export const BitcoinUnstakingModal: React.FC<BitcoinUnstakingModalProps> = ({
     setAmount(bitcoinXBalance.toString());
   };
 
-  const handleUnstakeNowClick = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setError(null);
-    setLoading(true);
-
+  const handleUnstakeNowClick = async () => {
     try {
-      const numAmount = Number(amount);
-      if (isNaN(numAmount) || numAmount <= 0) {
-        throw new Error('Please enter a valid amount');
-      }
-
-      if (numAmount > bitcoinXBalance) {
-        throw new Error('Amount exceeds your staked Bitcoin balance');
-      }
-
-      const transaction = await transactionService.unstakeBitcoin(userId, numAmount);
-      
+      console.log('1. Starting unstake process');
+      setLoading(true);
+      setError(null);
+      await transactionService.unstakeBitcoin(userId, Number(amount));
+      console.log('2. Unstake successful');
       setShowConfirmation(false);
       setShowSuccess(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Unstaking error:', err);
-      setError(err instanceof Error ? err.message : 'An error occurred while unstaking');
-      setShowSuccess(false);
+      setError(err.message || 'Failed to unstake Bitcoin');
     } finally {
       setLoading(false);
     }
@@ -100,6 +87,7 @@ export const BitcoinUnstakingModal: React.FC<BitcoinUnstakingModalProps> = ({
 
   React.useEffect(() => {
     if (!isOpen) {
+      console.log('Modal closing, resetting states');
       setInputValue('');
       setAmount('');
       setShowConfirmation(false);
@@ -110,6 +98,7 @@ export const BitcoinUnstakingModal: React.FC<BitcoinUnstakingModalProps> = ({
   }, [isOpen]);
 
   const handleDone = () => {
+    console.log('HandleDone called, showSuccess:', showSuccess);
     if (showSuccess) {
       onSuccess();
       onClose();
@@ -123,9 +112,10 @@ export const BitcoinUnstakingModal: React.FC<BitcoinUnstakingModalProps> = ({
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
+          console.log('Backdrop clicked, showSuccess:', showSuccess);
           if (showSuccess) {
             handleDone();
-          } else {
+          } else if (!loading) {
             onClose();
           }
         }
@@ -180,7 +170,7 @@ export const BitcoinUnstakingModal: React.FC<BitcoinUnstakingModalProps> = ({
                       fill="none"
                       stroke="#F7931A"
                       strokeWidth="3"
-                      strokeDasharray={`${((bitcoinXBalance - Number(amount || 0)) / (bitcoinBalance + bitcoinXBalance) * 100 / 100) * (2 * Math.PI * 29)} ${2 * Math.PI * 29}`}
+                      strokeDasharray={`${((bitcoinXBalance - Number(amount)) / (bitcoinBalance + bitcoinXBalance) * 100) / 100 * (2 * Math.PI * 29)} ${2 * Math.PI * 29}`}
                       strokeLinecap="round"
                     />
                   </svg>
@@ -194,7 +184,7 @@ export const BitcoinUnstakingModal: React.FC<BitcoinUnstakingModalProps> = ({
                 </div>
               </div>
               <h3 className="text-2xl font-medium mb-1">
-                Unstaked {formatCurrency(usdValue)} of Bitcoin
+                Unstaked ${Number(usdValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} of Bitcoin
               </h3>
               <p className="text-gray-400">
                 {Number(amount).toFixed(8)} BTC
@@ -203,7 +193,10 @@ export const BitcoinUnstakingModal: React.FC<BitcoinUnstakingModalProps> = ({
 
             <button
               onClick={handleDone}
-              className="w-full py-3 px-4 rounded-lg text-white font-medium bg-[#F7931A] hover:bg-[#F7931A]/90"
+              className="w-full py-3 px-4 rounded-lg text-black font-medium"
+              style={{
+                background: 'linear-gradient(90deg, #F7931A 0%, #FFAB4A 100%)'
+              }}
             >
               Done
             </button>
@@ -232,7 +225,7 @@ export const BitcoinUnstakingModal: React.FC<BitcoinUnstakingModalProps> = ({
                       fill="none"
                       stroke="#F7931A"
                       strokeWidth="3"
-                      strokeDasharray={`${((bitcoinXBalance - Number(amount || 0)) / (bitcoinBalance + bitcoinXBalance) * 100 / 100) * (2 * Math.PI * 29)} ${2 * Math.PI * 29}`}
+                      strokeDasharray={`${((bitcoinXBalance - Number(amount)) / (bitcoinBalance + bitcoinXBalance) * 100) / 100 * (2 * Math.PI * 29)} ${2 * Math.PI * 29}`}
                       strokeLinecap="round"
                     />
                   </svg>
@@ -279,7 +272,10 @@ export const BitcoinUnstakingModal: React.FC<BitcoinUnstakingModalProps> = ({
               <button
                 onClick={handleUnstakeNowClick}
                 disabled={loading}
-                className="flex-1 py-3 px-4 rounded-lg text-white font-medium bg-[#F7931A] hover:bg-[#F7931A]/90 disabled:opacity-50"
+                className="flex-1 py-3 px-4 rounded-lg text-black font-medium disabled:opacity-50"
+                style={{
+                  background: 'linear-gradient(90deg, #F7931A 0%, #FFAB4A 100%)'
+                }}
               >
                 {loading ? 'Processing...' : 'Unstake now'}
               </button>
@@ -370,7 +366,10 @@ export const BitcoinUnstakingModal: React.FC<BitcoinUnstakingModalProps> = ({
             <button
               onClick={() => setShowConfirmation(true)}
               disabled={!amount || Number(amount) <= 0 || Number(amount) > bitcoinXBalance}
-              className="w-full py-3 px-4 rounded-lg text-white font-medium bg-[#F7931A] hover:bg-[#F7931A]/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 px-4 rounded-lg text-black font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background: 'linear-gradient(90deg, #F7931A 0%, #FFAB4A 100%)'
+              }}
             >
               Preview unstake
             </button>
@@ -379,4 +378,36 @@ export const BitcoinUnstakingModal: React.FC<BitcoinUnstakingModalProps> = ({
       </div>
     </div>
   );
-}; 
+};
+
+/*
+ * UNSTAKING PROCESS EXPLANATION
+ * 
+ * Previous Issue:
+ * The unstaking process was failing due to a mismatch between the staking_positions table's
+ * status constraint (which only allowed 'active' or 'unstaked') and the update_staking_positions
+ * trigger trying to set positions to 'inactive'.
+ * 
+ * Root Cause:
+ * 1. The staking_positions table had a CHECK constraint allowing only 'active' or 'unstaked'
+ * 2. The update_staking_positions trigger was trying to set status to 'inactive'
+ * 3. This violated the constraint, causing the transaction to fail
+ * 
+ * Solution:
+ * 1. Updated the trigger function to use 'unstaked' instead of 'inactive'
+ * 2. Simplified the unstaking function to let the trigger handle position updates
+ * 3. Ensured consistent status values across all related functions
+ * 
+ * Lessons Learned:
+ * 1. Always check table constraints before making status changes
+ * 2. Use RAISE NOTICE or debug tables for better error tracking
+ * 3. Consider triggers when debugging database operations
+ * 4. Keep status values consistent across the entire application
+ * 5. Use step-by-step debugging to isolate issues in complex operations
+ * 
+ * Best Practices:
+ * 1. Document allowed status values in table definitions
+ * 2. Use enums or check constraints to enforce valid status values
+ * 3. Keep trigger logic in sync with table constraints
+ * 4. Test complex operations with detailed logging enabled
+ */ 

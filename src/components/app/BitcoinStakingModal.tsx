@@ -89,17 +89,6 @@ export const BitcoinStakingModal: React.FC<BitcoinStakingModalProps> = ({
 
       await transactionService.stakeBitcoin(userId, numAmount);
       
-      // After successful staking, update pool
-      const bitcoinPool = await supabase
-        .from('pools')
-        .select('id')
-        .eq('type', 'bitcoin')
-        .single();
-        
-      if (bitcoinPool) {
-        await updatePoolAfterStaking(bitcoinPool.data.id, numAmount, pricePerToken);
-      }
-
       setShowConfirmation(false);
       setShowSuccess(true);
     } catch (err) {
@@ -126,37 +115,6 @@ export const BitcoinStakingModal: React.FC<BitcoinStakingModalProps> = ({
     if (showSuccess) {
       onSuccess();
       onClose();
-    }
-  };
-
-  const updatePoolAfterStaking = async (poolId: string, amount: number, pricePerToken: number) => {
-    try {
-      // 1. Update or insert pool_assets record
-      const { error: poolAssetsError } = await supabase
-        .from('pool_assets')
-        .upsert({
-          pool_id: poolId,
-          asset_id: btcAsset.id, // Make sure this is the BTC asset ID
-          balance: amount
-        }, {
-          onConflict: 'pool_id,asset_id',
-          ignoreDuplicates: false
-        });
-
-      if (poolAssetsError) throw poolAssetsError;
-
-      // 2. Update pool's TVL
-      const { error: poolError } = await supabase
-        .from('pools')
-        .update({
-          total_value_locked: supabase.sql`total_value_locked + ${amount * pricePerToken}`
-        })
-        .eq('id', poolId);
-
-      if (poolError) throw poolError;
-    } catch (err) {
-      console.error('Error updating pool after staking:', err);
-      throw err;
     }
   };
 

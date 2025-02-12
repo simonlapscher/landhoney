@@ -43,6 +43,12 @@ interface CreateSellTransactionParams {
   pricePerToken: number;
 }
 
+interface ApproveDepositWithdrawalParams {
+  transactionId: string;
+  pricePerToken: number;
+  amount: number;
+}
+
 export const transactionService = {
   async verifyAsset(assetId: string): Promise<boolean> {
     console.log('Verifying asset with ID:', assetId);
@@ -891,14 +897,18 @@ export const transactionService = {
         p_transaction_id: transactionId,
         p_pool_id: poolId,
         p_price_per_token: pricePerToken,
-        p_payment_amount: poolReduction
+        p_pool_reduction: poolReduction,
+        p_user_tokens: userTokens,
+        p_usd_value: userTokens * pricePerToken
       });
 
       const { data, error } = await adminSupabase.rpc('process_sell_transaction', {
         p_transaction_id: transactionId,
         p_pool_id: poolId,
         p_price_per_token: pricePerToken,
-        p_payment_amount: poolReduction
+        p_pool_reduction: poolReduction,
+        p_user_tokens: userTokens,
+        p_usd_value: userTokens * pricePerToken
       });
 
       if (error) {
@@ -920,18 +930,44 @@ export const transactionService = {
     paymentAmount
   }: ApproveBuyTransactionParams) {
     try {
-      console.log('Calling process_buy_transaction with params:', {
-        p_transaction_id: transactionId,
-        p_pool_id: poolId,
-        p_price_per_token: pricePerToken,
-        p_payment_amount: paymentAmount
+      // First get the transaction to get the token amount and asset
+      const { data: transaction, error: txError } = await adminSupabase
+        .from('transactions')
+        .select('*, asset:assets(symbol, type)')
+        .eq('id', transactionId)
+        .single();
+
+      if (txError) throw txError;
+
+      // Check if it's a deposit/withdrawal or direct asset
+      const isDirectAsset = ['BTC', 'HONEY', 'USD'].includes(transaction.asset.symbol);
+      const isDepositOrWithdraw = ['deposit', 'withdraw'].includes(transaction.type);
+      const isDebtAsset = transaction.asset.type === 'debt';
+
+      // Only require pool ID for debt assets
+      if (isDebtAsset && !poolId) {
+        throw new Error('Pool ID is required for debt asset transactions');
+      }
+
+      // Add detailed logging
+      console.log('Transaction approval details:', {
+        transactionId,
+        isDirectAsset,
+        isDepositOrWithdraw,
+        isDebtAsset,
+        poolId,
+        pricePerToken,
+        paymentAmount,
+        transactionType: transaction.type,
+        assetSymbol: transaction.asset.symbol,
+        assetType: transaction.asset.type
       });
 
       const { data, error } = await adminSupabase.rpc('process_buy_transaction', {
         p_transaction_id: transactionId,
         p_pool_id: poolId,
         p_price_per_token: pricePerToken,
-        p_payment_amount: paymentAmount
+        p_amount: transaction.amount
       });
 
       if (error) {
@@ -952,47 +988,72 @@ export const transactionService = {
     amount,
     pricePerToken,
     paymentMethod
-  }: CreateBuyTransactionParams) {
+  }: {
+    userId: string;
+    assetId: string;
+    amount: number;
+    pricePerToken: number;
+    paymentMethod: PaymentMethod;
+  }) {
     try {
-      // Create the transaction record with correct initial status
-      const { data: transaction, error } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: userId,
-          asset_id: assetId,
-          type: 'buy',
-          amount,
-          price_per_token: pricePerToken,
-          payment_method: paymentMethod,
-          status: 'pending', // Always start as pending
-          metadata: {}
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // If using USD balance, process immediately
       if (paymentMethod === 'usd_balance') {
-        const { data: processResult, error: processError } = await supabase.rpc(
-          'process_buy_transaction',
-          {
+        // Create and process USD balance purchase immediately
+        const { data: transaction, error: createError } = await supabase
+          .from('transactions')
+          .insert({
+            user_id: userId,
+            asset_id: assetId,
+            type: 'buy',
+            amount: amount,
+            price_per_token: pricePerToken,
+            status: 'pending',
+            payment_method: 'usd_balance',
+            metadata: {
+              fee_usd: amount * pricePerToken * 0.005,
+              payment_method: 'usd_balance'
+            }
+          })
+          .select()
+          .single();
+
+        if (createError) throw createError;
+
+        // Process immediately with new function
+        const { data: processedTransaction, error: processError } = await supabase
+          .rpc('process_usd_balance_purchase', {
             p_transaction_id: transaction.id,
             p_price_per_token: pricePerToken,
-            p_payment_amount: amount * pricePerToken
-          }
-        );
+            p_amount: amount
+          });
 
-        if (processError) {
-          console.error('Error processing buy transaction:', processError);
-          throw processError;
-        }
+        if (processError) throw processError;
+        return processedTransaction;
+      } else {
+        // For bank/USDC payments, create pending transaction
+        const { data, error } = await supabase
+          .from('transactions')
+          .insert({
+            user_id: userId,
+            asset_id: assetId,
+            type: 'buy',
+            amount: amount,
+            price_per_token: pricePerToken,
+            status: 'pending',
+            payment_method: paymentMethod,
+            metadata: {
+              fee_usd: amount * pricePerToken * 0.005,
+              payment_method: paymentMethod
+            }
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return data;
       }
-
-      return transaction;
-    } catch (err) {
-      console.error('Error creating buy transaction:', err);
-      throw err;
+    } catch (error) {
+      console.error('Error creating buy transaction:', error);
+      throw error;
     }
   },
 
@@ -1098,6 +1159,30 @@ export const transactionService = {
       return transaction;
     } catch (err) {
       console.error('Error creating sell transaction:', err);
+      throw err;
+    }
+  },
+
+  async approveDepositWithdrawal({
+    transactionId,
+    pricePerToken,
+    amount
+  }: ApproveDepositWithdrawalParams) {
+    try {
+      const { data, error } = await adminSupabase.rpc('process_deposit_withdrawal', {
+        p_transaction_id: transactionId,
+        p_price_per_token: pricePerToken,
+        p_amount: amount
+      });
+
+      if (error) {
+        console.error('Error processing deposit/withdrawal:', error);
+        throw new Error(`Failed to process deposit/withdrawal: ${error.message}`);
+      }
+
+      return data;
+    } catch (err) {
+      console.error('Error in approveDepositWithdrawal:', err);
       throw err;
     }
   },

@@ -232,6 +232,96 @@ export const Portfolio: React.FC = () => {
         isBackgroundRefresh
       });
 
+      // First get USD asset to ensure we always have it
+      const { data: usdAsset } = await supabase
+        .from('assets')
+        .select('*')
+        .eq('symbol', 'USD')
+        .single();
+
+      // Get all balances including USD
+      const { data: rawBalances, error: balancesError } = await supabase
+        .from('user_balances')
+        .select(`
+          *,
+          asset:assets (
+            *,
+            debt_assets (
+              id,
+              apr,
+              term_months,
+              loan_amount,
+              appraised_value,
+              city,
+              state
+            )
+          )
+        `)
+        .eq('user_id', user.id);
+
+      if (balancesError) throw balancesError;
+
+      // Process balances and ensure USD is included
+      let processedBalances = (rawBalances || []).reduce((acc, balance) => {
+        // Skip HONEYX and BTCX as they'll be combined
+        if (balance.asset.symbol === 'HONEYX' || balance.asset.symbol === 'BTCX') {
+          return acc;
+        }
+
+        const isDebtType = balance.asset.type === 'debt';
+        const debtDetails = isDebtType ? balance.asset.debt_assets?.[0] : null;
+
+        let combinedBalance = Number(balance.balance);
+        
+        // If this is HONEY, add HONEYX balance
+        if (balance.asset.symbol === 'HONEY') {
+          const honeyXBalance = rawBalances.find(b => b.asset.symbol === 'HONEYX');
+          if (honeyXBalance) {
+            combinedBalance += Number(honeyXBalance.balance);
+          }
+        }
+
+        // If this is BTC, add BTCX balance
+        if (balance.asset.symbol === 'BTC') {
+          const btcXBalance = rawBalances.find(b => b.asset.symbol === 'BTCX');
+          if (btcXBalance) {
+            combinedBalance += Number(btcXBalance.balance);
+          }
+        }
+
+        return [...acc, {
+          ...balance,
+          balance: combinedBalance,
+          total_value: combinedBalance * balance.asset.price_per_token,
+          asset: {
+            ...balance.asset,
+            type: balance.asset.type,
+            apr: debtDetails?.apr,
+            location: isDebtType && debtDetails?.city && debtDetails?.state 
+              ? `${debtDetails.city}, ${debtDetails.state}`
+              : undefined
+          }
+        }];
+      }, []);
+
+      // Add USD with zero balance if it doesn't exist
+      if (!processedBalances.some(b => b.asset.symbol === 'USD') && usdAsset) {
+        processedBalances.unshift({
+          id: 'usd-placeholder',
+          user_id: user.id,
+          asset_id: usdAsset.id,
+          balance: 0,
+          total_value: 0,
+          total_interest_earned: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          last_transaction_at: null,
+          asset: usdAsset
+        });
+      }
+
+      setBalances(processedBalances);
+
       // Get profile using email
       const { data: profile, error: profileError } = await supabase.rpc(
         'get_profile_by_email',
@@ -248,9 +338,8 @@ export const Portfolio: React.FC = () => {
         throw new Error('User profile not found');
       }
 
-      const [transactionsData, balancesData, stakingData, btcData] = await Promise.all([
+      const [transactionsData, stakingData, btcData] = await Promise.all([
         transactionService.getUserTransactions(profile.user_id) as Promise<TransactionWithAsset[]>,
-        transactionService.getUserBalances(profile.user_id),
         transactionService.getHoneyStakingInfo(profile.user_id).catch(err => {
           console.warn('Failed to fetch staking info:', err);
           return null;
@@ -275,11 +364,10 @@ export const Portfolio: React.FC = () => {
       
       setReturns30D(returns);
 
-      console.log('Raw balances data:', balancesData);
       console.log('Staking info:', stakingData);
       console.log('Bitcoin staking info:', btcData);
 
-      if (transactionsData && balancesData) {
+      if (transactionsData) {
         const mappedTransactions = transactionsData.map(t => ({
           ...t,
           asset: {
@@ -288,79 +376,12 @@ export const Portfolio: React.FC = () => {
           }
         })) as Transaction[];
 
-        // Map balances and combine HONEY/HONEYX and BTC/BTCX
-        const mappedBalances = (balancesData as RawBalanceResponse[])
-          .filter(b => Number(b.balance) > 0)
-          .reduce((acc, b) => {
-            // Skip HONEYX and BTCX as they'll be combined
-            if (b.asset.symbol === 'HONEYX' || b.asset.symbol === 'BTCX') {
-              return acc;
-            }
-
-            console.log('Raw asset details:', {
-              symbol: b.asset.symbol,
-              type: b.asset.type,
-              debtDetails: b.asset.debt_assets?.[0],
-              rawAsset: b.asset
-            });
-            
-            const isDebtType = b.asset.type === 'debt';
-            const debtDetails = isDebtType ? b.asset.debt_assets?.[0] : null;
-            
-            const asset: ExtendedAsset = {
-              ...b.asset,
-              // Preserve the original type
-              type: b.asset.type as AssetType,
-              apr: debtDetails?.apr,
-              location: isDebtType && debtDetails?.city && debtDetails?.state 
-                ? `${debtDetails.city}, ${debtDetails.state}`
-                : undefined
-            };
-
-            let balance = Number(b.balance);
-
-            // If this is HONEY, add HONEYX balance
-            if (b.asset.symbol === 'HONEY') {
-              const honeyXBalance = balancesData.find(bal => bal.asset.symbol === 'HONEYX');
-              if (honeyXBalance) {
-                balance += Number(honeyXBalance.balance);
-              }
-            }
-
-            // If this is BTC, add BTCX balance
-            if (b.asset.symbol === 'BTC') {
-              const btcXBalance = balancesData.find(bal => bal.asset.symbol === 'BTCX');
-              if (btcXBalance) {
-                balance += Number(btcXBalance.balance);
-              }
-            }
-
-            return [...acc, {
-              id: b.id,
-              user_id: b.user_id,
-              asset_id: b.asset_id,
-              balance: balance,
-              total_value: balance * Number(b.asset.price_per_token),
-              total_interest_earned: Number(b.total_interest_earned),
-              created_at: b.created_at,
-              updated_at: b.updated_at,
-              last_transaction_at: b.last_transaction_at || null,
-              asset: {
-                ...asset,
-                type: asset.type as AssetType
-              }
-            }];
-          }, []) as PortfolioBalance[];
-
-        console.log('Mapped balances:', mappedBalances);
-
         setTransactions(mappedTransactions);
-        setBalances(mappedBalances);
         setStakingInfo(stakingData);
         setBtcStakingInfo(btcData);
         
         // Find BTC data from balances
-        const btcBalanceData = balancesData.find(b => b.asset.symbol === 'BTC');
+        const btcBalanceData = processedBalances.find(b => b.asset.symbol === 'BTC');
         setBtcBalance(btcBalanceData?.balance || 0);
         // Use the BTC asset from balances data instead of staking data
         setBtcAsset(btcBalanceData?.asset || null);
@@ -470,81 +491,221 @@ export const Portfolio: React.FC = () => {
     setSelectedTransaction(transaction);
   };
 
-  // First filter the balances
-  const filteredBalances = balances
-    .filter(balance => {
-      if (balance.asset.symbol === 'HONEYX') return false;
-      
-      switch (assetType) {
-        case 'all':
-          return true;
-        case 'cash':
-          return balance.asset.type === 'cash';
-        case 'debt':
-          return balance.asset.type === 'debt';
-        case 'commodity':
-          return balance.asset.type === 'commodity';
-        default:
-          return false;
+  const renderBalances = () => {
+    if (loading) return null;
+
+    // Filter balances based on type, but always include USD in relevant views
+    let displayBalances = balances.filter(balance => {
+      if (balance.asset.symbol === 'USD') {
+        return assetType === 'all' || assetType === 'cash';
       }
-    })
-    .map(balance => {
-      // For Honey, show combined balance of Honey + HoneyX
-      if (balance.asset.symbol === 'HONEY' && stakingInfo) {
-        return {
-          ...balance,
-          balance: stakingInfo.honeyBalance + stakingInfo.honeyXBalance,
-          total_value: (stakingInfo.honeyBalance + stakingInfo.honeyXBalance) * balance.asset.price_per_token
-        };
-      }
-      return balance;
+      return assetType === 'all' || balance.asset.type === assetType;
     });
 
-  // Add USD if it's not already present and we're showing all or cash assets
-  if (!filteredBalances.some(b => b.asset.symbol === 'USD') && 
-      (assetType === 'all' || assetType === 'cash')) {
-    // Find USD in original balances
-    const usdAsset = balances.find(b => b.asset.symbol === 'USD')?.asset;
-    if (usdAsset) {
-      filteredBalances.push({
-        id: 'virtual-usd',
-        user_id: user?.id || '',
-        asset_id: usdAsset.id,
-        balance: 0,
-        total_value: 0,
-        total_interest_earned: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        last_transaction_at: null,
-        asset: usdAsset
-      });
+    // Sort balances by USD value in descending order
+    displayBalances.sort((a, b) => {
+      const aValue = a.balance * a.asset.price_per_token;
+      const bValue = b.balance * b.asset.price_per_token;
+      return bValue - aValue;
+    });
+
+    // Calculate subtotal for current category
+    const categorySubtotal = displayBalances.reduce((sum, balance) => 
+      sum + (balance.balance * balance.asset.price_per_token), 0
+    );
+
+    if (displayBalances.length === 0 && assetType !== 'all' && assetType !== 'cash') {
+      return (
+        <div className="flex flex-col items-center py-12">
+          <p className="text-light/60 text-lg mb-4">
+            You don't have any {
+              assetType === 'debt' ? 'debt assets' : 
+              assetType === 'commodity' ? 'commodities' :
+              'assets'
+            }.
+          </p>
+          <Button
+            variant="primary"
+            onClick={() => navigate('/app/invest')}
+            className="!bg-[#00D897] hover:!bg-[#00C085] px-8"
+          >
+            Buy {
+              assetType === 'debt' ? 'Debt' : 
+              assetType === 'commodity' ? 'Commodities' :
+              'Assets'
+            }
+          </Button>
+        </div>
+      );
     }
-  }
 
-  // Sort balances by total value
-  const sortedBalances = filteredBalances.sort((a, b) => b.total_value - a.total_value);
+    return (
+      <div>
+        {/* Category Subtotal - Moved to top */}
+        <div className="mb-6">
+          <div className="text-2xl font-medium text-light">
+            {formatCurrency(categorySubtotal)}
+          </div>
+        </div>
 
-  // Debug log filtered balances before subtotal
-  console.log('Filtered balances before subtotal:', filteredBalances.map(b => ({
-    symbol: b.asset.symbol,
-    type: b.asset.type,
-    value: b.total_value
-  })));
-
-  // Calculate subtotal based on filtered balances only
-  const subtotal = filteredBalances.reduce((sum, balance) => {
-    const value = balance.total_value || 0;
-    // Debug log for subtotal calculation
-    console.log(`Adding to subtotal: ${balance.asset.symbol} (${balance.asset.type}) = ${value}`);
-    return sum + value;
-  }, 0);
-
-  // Debug log final subtotal
-  console.log('Final subtotal:', {
-    assetType,
-    subtotal,
-    numBalances: filteredBalances.length
-  });
+        {/* Assets List */}
+        <div className="space-y-4">
+          {displayBalances.map(balance => (
+            <div key={balance.asset_id} className="grid grid-cols-1 p-4 hover:bg-light/5">
+              <div className="grid grid-cols-[minmax(250px,2fr)_minmax(200px,1.5fr)_minmax(150px,1fr)_minmax(100px,1fr)_minmax(200px,1fr)] gap-4 items-center">
+                <div className="flex items-center">
+                  <div className="relative">
+                    {balance.asset.symbol === 'HONEY' && stakingInfo && (
+                      <div className="absolute inset-0 w-12 h-12 -left-1 -top-1">
+                        <svg 
+                          className="absolute inset-0 w-full h-full -rotate-90"
+                          viewBox="0 0 48 48"
+                          style={{ zIndex: 20 }}
+                        >
+                          <circle
+                            cx="24"
+                            cy="24"
+                            r="21"
+                            fill="none"
+                            stroke="#2A2A2A"
+                            strokeWidth="4"
+                          />
+                          <circle
+                            cx="24"
+                            cy="24"
+                            r="21"
+                            fill="none"
+                            stroke="#FFD700"
+                            strokeWidth="4"
+                            strokeDasharray={`${(stakingInfo.stakingPercentage / 100) * (2 * Math.PI * 21)} ${2 * Math.PI * 21}`}
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </div>
+                    )}
+                    {balance.asset.symbol === 'BTC' ? (
+                      <BitcoinAssetDisplay 
+                        asset={balance.asset}
+                        stakingPercentage={btcStakingInfo?.stakingPercentage || 0}
+                      />
+                    ) : (
+                      <img
+                        src={balance.asset.main_image}
+                        alt={balance.asset.name}
+                        className="w-10 h-10 rounded-full relative"
+                        style={{
+                          zIndex: 10,
+                          border: balance.asset.symbol === 'HONEY' ? '2px solid transparent' : 'none',
+                          background: balance.asset.symbol === 'HONEY' ? '#1E1E1E' : 'transparent'
+                        }}
+                      />
+                    )}
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-lg font-semibold truncate">
+                      {balance.asset.type === 'debt' ? balance.asset.location : balance.asset.name}
+                    </h3>
+                    {balance.asset.symbol === 'HONEY' && stakingInfo ? (
+                      <p className="text-sm text-gray-500">{stakingInfo.stakingPercentage.toFixed(1)}% staked</p>
+                    ) : balance.asset.symbol === 'BTC' && btcStakingInfo ? (
+                      <p className="text-sm text-gray-500">{btcStakingInfo.stakingPercentage.toFixed(1)}% staked</p>
+                    ) : (
+                      <p className="text-sm text-gray-500">{balance.asset.symbol}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-light truncate">
+                    {formatCurrency(balance.total_value)}
+                  </div>
+                  <div className="text-sm text-light/60 truncate">
+                    {balance.asset.symbol === 'USD' 
+                      ? formatTokenAmount(balance.balance, 2)
+                      : formatTokenAmount(balance.balance)
+                    } {balance.asset.symbol}
+                  </div>
+                </div>
+                <div className="text-light truncate">
+                  {formatCurrency(balance.asset.price_per_token)}
+                </div>
+                <div className="text-light truncate">
+                  {balance.asset.apr ? `${balance.asset.apr.toFixed(2)}%` : 'N/A'}
+                </div>
+                <div>
+                  {balance.asset.symbol === 'HONEY' && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowHoneyStakingModal(true)}
+                        className="whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium"
+                        style={{
+                          background: 'linear-gradient(90deg, #FFD700 0%, #FFA500 100%)'
+                        }}
+                      >
+                        {stakingInfo && stakingInfo.honeyXBalance > 0 ? 'Stake More' : 'Stake'}
+                      </button>
+                      {stakingInfo && stakingInfo.honeyXBalance > 0 && (
+                        <button
+                          onClick={() => setShowHoneyUnstakingModal(true)}
+                          className="whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
+                        >
+                          Unstake
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {balance.asset.symbol === 'BTC' && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowBitcoinStakingModal(true)}
+                        className="whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium"
+                        style={{
+                          background: 'linear-gradient(90deg, #F7931A 0%, #FFAB4A 100%)'
+                        }}
+                      >
+                        {btcStakingInfo?.bitcoinXBalance > 0 ? 'Stake More' : 'Stake'}
+                      </button>
+                      {btcStakingInfo?.bitcoinXBalance > 0 && (
+                        <button
+                          onClick={() => setShowBitcoinUnstakingModal(true)}
+                          className="whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
+                        >
+                          Unstake
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {balance.asset.symbol === 'USD' && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedAsset(balance.asset);
+                          setSelectedBalance(balance.balance);
+                          setShowDepositModal(true);
+                        }}
+                        className="whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium bg-gradient-to-r from-[#4bae4f] to-[#90ee90]"
+                      >
+                        Deposit
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedAsset(balance.asset);
+                          setSelectedBalance(balance.balance);
+                          setShowWithdrawModal(true);
+                        }}
+                        className="whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
+                      >
+                        Withdraw
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   const handleStakeClick = (balance: PortfolioBalance) => {
     setSelectedHoneyAsset(balance);
@@ -554,37 +715,6 @@ export const Portfolio: React.FC = () => {
   const handleUnstakeClick = (balance: PortfolioBalance) => {
     setSelectedHoneyAsset(balance);
     setShowUnstakingModal(true);
-  };
-
-  const renderHoneyStakingInfo = (balance: PortfolioBalance) => {
-    if (balance.asset.symbol !== 'HONEY' || !stakingInfo) {
-      return null;
-    }
-
-    return (
-      <div className="flex items-center justify-between w-full mt-4">
-        <div className="flex items-center space-x-2">
-          <div className="relative w-6 h-6">
-            <div 
-              className="absolute inset-0 rounded-full border-2 border-[#FFD700]"
-              style={{
-                background: `conic-gradient(#FFD700 ${stakingInfo.stakingPercentage}%, transparent ${stakingInfo.stakingPercentage}%)`
-              }}
-            />
-          </div>
-          <span className="text-sm text-gray-500">
-            {stakingInfo.stakingPercentage.toFixed(1)}% staked
-          </span>
-        </div>
-        <Button
-          variant="secondary"
-          onClick={() => handleStakeClick(balance)}
-          className="text-sm"
-        >
-          Manage Staking
-        </Button>
-      </div>
-    );
   };
 
   const renderTransactionHistory = () => {
@@ -837,208 +967,12 @@ export const Portfolio: React.FC = () => {
             </nav>
           </div>
 
-          {/* Category Subtotal */}
-          <div className="mt-6 pl-1">
-            <div className="text-2xl font-medium text-light">
-              {formatCurrency(subtotal)}
-            </div>
-          </div>
         </div>
 
         {/* Asset List */}
         <div className="mt-8 mb-12">
           <div className="bg-dark-2 rounded-lg overflow-hidden">
-            {filteredBalances.length > 0 ? (
-              <div>
-                {/* Table Headers */}
-                <div className="grid grid-cols-[minmax(250px,2fr)_minmax(200px,1.5fr)_minmax(150px,1fr)_minmax(100px,1fr)_minmax(200px,1fr)] gap-4 p-4 text-light/60">
-                  <div className="text-left">Name</div>
-                  <div className="text-left">Balance</div>
-                  <div className="text-left">Current Price</div>
-                  <div className="text-left">APR</div>
-                  <div className="text-left">Actions</div>
-                </div>
-                
-                {/* Table Rows */}
-                <div>
-                  {filteredBalances.map((balance) => (
-                    <div key={balance.asset_id} className="grid grid-cols-1 p-4 hover:bg-light/5">
-                      <div className="grid grid-cols-[minmax(250px,2fr)_minmax(200px,1.5fr)_minmax(150px,1fr)_minmax(100px,1fr)_minmax(200px,1fr)] gap-4 items-center">
-                        <div className="flex items-center">
-                          <div className="relative">
-                            {balance.asset.symbol === 'HONEY' && stakingInfo && (
-                              <div className="absolute inset-0 w-12 h-12 -left-1 -top-1">
-                                <svg 
-                                  className="absolute inset-0 w-full h-full -rotate-90"
-                                  viewBox="0 0 48 48"
-                                  style={{ zIndex: 20 }}
-                                >
-                                  <circle
-                                    cx="24"
-                                    cy="24"
-                                    r="21"
-                                    fill="none"
-                                    stroke="#2A2A2A"
-                                    strokeWidth="4"
-                                  />
-                                  <circle
-                                    cx="24"
-                                    cy="24"
-                                    r="21"
-                                    fill="none"
-                                    stroke="#FFD700"
-                                    strokeWidth="4"
-                                    strokeDasharray={`${(stakingInfo.stakingPercentage / 100) * (2 * Math.PI * 21)} ${2 * Math.PI * 21}`}
-                                    strokeLinecap="round"
-                                  />
-                                </svg>
-                              </div>
-                            )}
-                            {balance.asset.symbol === 'BTC' ? (
-                              <BitcoinAssetDisplay 
-                                asset={balance.asset}
-                                stakingPercentage={btcStakingInfo?.stakingPercentage || 0}
-                              />
-                            ) : (
-                              <img
-                                src={balance.asset.main_image}
-                                alt={balance.asset.name}
-                                className="w-10 h-10 rounded-full relative"
-                                style={{
-                                  zIndex: 10,
-                                  border: balance.asset.symbol === 'HONEY' ? '2px solid transparent' : 'none',
-                                  background: balance.asset.symbol === 'HONEY' ? '#1E1E1E' : 'transparent'
-                                }}
-                              />
-                            )}
-                          </div>
-                          <div className="ml-3">
-                            <h3 className="text-lg font-semibold truncate">
-                              {balance.asset.type === 'debt' ? balance.asset.location : balance.asset.name}
-                            </h3>
-                            {balance.asset.symbol === 'HONEY' && stakingInfo ? (
-                              <p className="text-sm text-gray-500">{stakingInfo.stakingPercentage.toFixed(1)}% staked</p>
-                            ) : balance.asset.symbol === 'BTC' && btcStakingInfo ? (
-                              <p className="text-sm text-gray-500">{btcStakingInfo.stakingPercentage.toFixed(1)}% staked</p>
-                            ) : (
-                              <p className="text-sm text-gray-500">{balance.asset.symbol}</p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-light truncate">
-                            {formatCurrency(balance.total_value)}
-                          </div>
-                          <div className="text-sm text-light/60 truncate">
-                            {balance.asset.symbol === 'USD' 
-                              ? formatTokenAmount(balance.balance, 2)
-                              : formatTokenAmount(balance.balance)
-                            } {balance.asset.symbol}
-                          </div>
-                        </div>
-                        <div className="text-light truncate">
-                          {formatCurrency(balance.asset.price_per_token)}
-                        </div>
-                        <div className="text-light truncate">
-                          {balance.asset.apr ? `${balance.asset.apr.toFixed(2)}%` : 'N/A'}
-                        </div>
-                        <div>
-                          {balance.asset.symbol === 'HONEY' && (
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => setShowHoneyStakingModal(true)}
-                                className="whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium"
-                                style={{
-                                  background: 'linear-gradient(90deg, #FFD700 0%, #FFA500 100%)'
-                                }}
-                              >
-                                {stakingInfo && stakingInfo.honeyXBalance > 0 ? 'Stake More' : 'Stake'}
-                              </button>
-                              {stakingInfo && stakingInfo.honeyXBalance > 0 && (
-                                <button
-                                  onClick={() => setShowHoneyUnstakingModal(true)}
-                                  className="whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
-                                >
-                                  Unstake
-                                </button>
-                              )}
-                            </div>
-                          )}
-                          {balance.asset.symbol === 'BTC' && (
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => setShowBitcoinStakingModal(true)}
-                                className="whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium"
-                                style={{
-                                  background: 'linear-gradient(90deg, #F7931A 0%, #FFAB4A 100%)'
-                                }}
-                              >
-                                {btcStakingInfo?.bitcoinXBalance > 0 ? 'Stake More' : 'Stake'}
-                              </button>
-                              {btcStakingInfo?.bitcoinXBalance > 0 && (
-                                <button
-                                  onClick={() => setShowBitcoinUnstakingModal(true)}
-                                  className="whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
-                                >
-                                  Unstake
-                                </button>
-                              )}
-                            </div>
-                          )}
-                          {balance.asset.symbol === 'USD' && (
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => {
-                                  setSelectedAsset(balance.asset);
-                                  setSelectedBalance(balance.balance);
-                                  setShowDepositModal(true);
-                                }}
-                                className="whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium bg-gradient-to-r from-[#4bae4f] to-[#90ee90]"
-                              >
-                                Deposit
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setSelectedAsset(balance.asset);
-                                  setSelectedBalance(balance.balance);
-                                  setShowWithdrawModal(true);
-                                }}
-                                className="whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
-                              >
-                                Withdraw
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center py-12">
-                <p className="text-light/60 text-lg mb-4">
-                  You don't have any {
-                    assetType === 'all' ? 'assets' : 
-                    assetType === 'debt' ? 'debt assets' : 
-                    assetType === 'cash' ? 'cash assets' :
-                    'commodities'
-                  }.
-                </p>
-                <Button
-                  variant="primary"
-                  onClick={() => navigate('/app/invest')}
-                  className="!bg-[#00D897] hover:!bg-[#00C085] px-8"
-                >
-                  Buy {
-                    assetType === 'all' ? 'Assets' : 
-                    assetType === 'debt' ? 'Debt' : 
-                    assetType === 'cash' ? 'Cash' :
-                    'Commodities'
-                  }
-                </Button>
-              </div>
-            )}
+            {renderBalances()}
           </div>
         </div>
 
@@ -1099,7 +1033,7 @@ export const Portfolio: React.FC = () => {
         <BitcoinStakingModal
           isOpen={showBitcoinStakingModal}
           onClose={() => setShowBitcoinStakingModal(false)}
-          bitcoinBalance={btcBalance}
+          bitcoinBalance={btcBalance - (btcStakingInfo?.bitcoinXBalance || 0)}
           bitcoinXBalance={btcStakingInfo?.bitcoinXBalance || 0}
           stakingPercentage={btcStakingInfo?.stakingPercentage || 0}
           pricePerToken={btcAsset?.price_per_token || 0}
