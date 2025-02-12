@@ -233,7 +233,7 @@ export const LiquidReserve: React.FC = () => {
   const syncPoolBalances = async () => {
     try {
       // Get all staked assets (BTCX and HONEYX balances)
-      const { data: stakedBalances, error: stakedError } = await supabase
+      const { data: stakedBalances } = await supabase
         .from('user_balances')
         .select(`
           asset_id,
@@ -245,50 +245,59 @@ export const LiquidReserve: React.FC = () => {
         `)
         .in('assets.symbol', ['BTCX', 'HONEYX']);
 
-      if (stakedError) throw stakedError;
-
       // Group staked balances by asset
       const totalStaked = stakedBalances?.reduce((acc, balance) => {
         const isHoney = balance.assets.symbol === 'HONEYX';
         const poolType = isHoney ? 'honey' : 'bitcoin';
-        const mainAssetSymbol = isHoney ? 'HONEY' : 'BTC';
-
         if (!acc[poolType]) {
           acc[poolType] = {
             total: 0,
-            mainAssetSymbol
+            mainAssetSymbol: isHoney ? 'HONEY' : 'BTC'
           };
         }
         acc[poolType].total += balance.balance;
         return acc;
       }, {} as Record<string, { total: number, mainAssetSymbol: string }>);
 
-      // For each pool, ensure pool_assets reflects total staked amount
+      // For each pool, update TVL without modifying liquid reserves
       for (const [poolType, staked] of Object.entries(totalStaked)) {
         const { data: pool } = await supabase
           .from('pools')
-          .select('id, main_asset:assets!pools_main_asset_id_fkey (id, price_per_token)')
+          .select(`
+            id, 
+            main_asset:assets!pools_main_asset_id_fkey (
+              id,
+              price_per_token
+            ),
+            pool_assets (
+              balance,
+              asset:assets (
+                id,
+                symbol,
+                price_per_token
+              )
+            )
+          `)
           .eq('type', poolType)
           .single();
 
         if (pool) {
-          // Update or insert pool_assets record
-          await supabase
-            .from('pool_assets')
-            .upsert({
-              pool_id: pool.id,
-              asset_id: pool.main_asset.id,
-              balance: staked.total
-            }, {
-              onConflict: 'pool_id,asset_id',
-              ignoreDuplicates: false
-            });
+          // Calculate total value including both staked and liquid
+          const mainAsset = pool.pool_assets?.find(
+            pa => pa.asset.id === pool.main_asset.id
+          );
+          const liquidValue = mainAsset 
+            ? mainAsset.balance * pool.main_asset.price_per_token 
+            : 0;
+          const stakedValue = staked.total * pool.main_asset.price_per_token;
+          const totalValue = liquidValue + stakedValue;
 
-          // Update pool's TVL
+          // Only update TVL, don't modify pool_assets
           await supabase
             .from('pools')
             .update({
-              total_value_locked: staked.total * pool.main_asset.price_per_token
+              total_value_locked: totalValue,
+              updated_at: new Date().toISOString()
             })
             .eq('id', pool.id);
         }
