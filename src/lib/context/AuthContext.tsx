@@ -5,11 +5,13 @@ import { supabase } from '../supabase';
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
+  originalUser?: User | null;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isLoading: true,
+  originalUser: null
 });
 
 export const useAuth = () => {
@@ -23,6 +25,7 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [originalUser, setOriginalUser] = useState<User | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -38,6 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (mounted) {
           setUser(session?.user ?? null);
+          setOriginalUser(session?.user ?? null);
           setIsLoading(false);
         }
       } catch (error) {
@@ -59,6 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (mounted) {
           setUser(session?.user ?? null);
+          setOriginalUser(session?.user ?? null);
           setIsLoading(false);
         }
       }
@@ -72,7 +77,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const value = {
     user,
-    isLoading
+    isLoading,
+    originalUser
   };
 
   console.log('AuthProvider state:', {

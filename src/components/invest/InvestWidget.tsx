@@ -11,6 +11,8 @@ import { useBalances } from '../../lib/hooks/useBalances';
 import { formatCurrency } from '../../lib/utils/formatters';
 import { toast } from 'react-hot-toast';
 
+type PaymentMethodData = 'usd_balance' | 'bank_account' | 'usdc';
+
 interface InvestWidgetProps {
   asset: Asset;
   onClose: () => void;
@@ -33,9 +35,9 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
   const [validationError, setValidationError] = useState<string | null>(null);
   const { user } = useAuth();
   const { balances } = useBalances();
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('usd_balance');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodData>('usd_balance');
   const [inputError, setInputError] = useState<string | null>(null);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethodData | null>(null);
   
   // Get USD balance
   const usdBalance = balances?.find(b => b.asset.symbol === 'USD')?.balance || 0;
@@ -470,7 +472,7 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
                 if (e.target.value === 'usd_balance') {
                   setSelectedPaymentMethod(null);
                 }
-                setPaymentMethod(e.target.value as PaymentMethod);
+                setPaymentMethod(e.target.value as PaymentMethodData);
               }}
               disabled={widgetState === 'review'}
               className="w-full appearance-none bg-light/10 text-light pl-4 pr-12 py-3 rounded-full focus:outline-none focus:ring-2 focus:ring-primary"

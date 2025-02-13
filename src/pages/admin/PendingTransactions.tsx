@@ -3,7 +3,7 @@ import { adminSupabase } from '../../lib/supabase';
 import { format } from 'date-fns';
 import { transactionService } from '../../lib/services/transactionService';
 import { supabase } from '../../lib/supabase';
-import { Pool } from '../../lib/types/pool';
+import { Pool, PoolType } from '../../lib/types/pool';
 import { formatCurrency } from '../../utils/format';
 import { toast } from 'react-hot-toast';
 
@@ -29,6 +29,28 @@ interface PoolImpact {
   isBuy: boolean;
   fromPool: number;
   fromOffering: number;
+}
+
+interface DatabasePool {
+  id: string;
+  type: string;
+  total_value_locked: number;
+  apr: number;
+  main_asset: {
+    id: string;
+    symbol: string;
+    name: string;
+    price_per_token: number;
+  };
+  pool_assets: {
+    balance: number;
+    asset: {
+      id: string;
+      symbol: string;
+      name: string;
+      price_per_token: number;
+    };
+  }[];
 }
 
 export const PendingTransactions: React.FC = () => {
@@ -103,7 +125,46 @@ export const PendingTransactions: React.FC = () => {
             )
           )
         `);
-      setPools(poolsData || []);
+
+      if (poolsData) {
+        // Transform database pools to match our Pool type
+        const transformedPools = (poolsData as unknown as DatabasePool[])
+          .filter((pool): pool is DatabasePool => {
+            if (!pool || !pool.main_asset || !Array.isArray(pool.pool_assets)) {
+              console.error('Invalid pool data structure:', pool);
+              return false;
+            }
+            return true;
+          })
+          .map((pool): Pool => ({
+            id: pool.id,
+            type: pool.type.toLowerCase() as PoolType,
+            mainAssetId: pool.main_asset.id,
+            apr: pool.apr,
+            maxSize: 0, // Set default or fetch from DB
+            isPaused: false, // Set default or fetch from DB
+            totalValueLocked: pool.total_value_locked,
+            createdAt: new Date().toISOString(), // Set default or fetch from DB
+            updatedAt: new Date().toISOString(), // Set default or fetch from DB
+            main_asset: {
+              id: pool.main_asset.id,
+              symbol: pool.main_asset.symbol,
+              name: pool.main_asset.name,
+              price_per_token: pool.main_asset.price_per_token
+            },
+            pool_assets: pool.pool_assets.map(pa => ({
+              balance: pa.balance,
+              asset: {
+                id: pa.asset.id,
+                symbol: pa.asset.symbol,
+                name: pa.asset.name,
+                price_per_token: pa.asset.price_per_token
+              }
+            }))
+          }));
+        
+        setPools(transformedPools);
+      }
     };
 
     fetchPools();
@@ -133,39 +194,75 @@ export const PendingTransactions: React.FC = () => {
         }
 
         // For direct assets and deposits/withdrawals, use transaction price
-        const finalPrice = (isDirectAsset || transaction.type === 'withdraw')
-          ? transaction.price_per_token
-          : (adminPrice || transaction.price_per_token);
+        // If adminPrice is not set, use transaction price as fallback
+        const basePrice = transaction.price_per_token;
 
         if (transaction.type === 'sell') {
-          console.log('Approving sell transaction with values:', {
-            transactionId: transaction.id,
-            poolId: isDirectAsset ? null : selectedPool!.id,
-            pricePerToken: finalPrice,
-            poolReduction: poolImpact?.poolReduction || 0,
-            userTokens: transaction.amount
-          });
+          if (!selectedPool?.id && !isDirectAsset) {
+            throw new Error('Pool selection required for non-direct assets');
+          }
+
+          // For non-direct assets, we need a pool and its main asset
+          if (!isDirectAsset) {
+            if (!selectedPool) {
+              throw new Error('Pool is required for non-direct assets');
+            }
+            if (!selectedPool.main_asset) {
+              throw new Error('Selected pool is missing main asset information');
+            }
+            // Validate admin price for non-direct assets
+            if (adminPrice === null) {
+              throw new Error('Admin price is required for non-direct assets');
+              return;
+            }
+
+            // At this point, we know main_asset exists and has all required properties
+            const mainAsset = selectedPool.main_asset as Required<NonNullable<Pool['main_asset']>>;
+            if (!mainAsset.price_per_token) {
+              throw new Error('Selected pool main asset is missing price information');
+            }
+          }
+
+          // At this point, for non-direct assets, we know adminPrice is not null
+          const pricePerToken = isDirectAsset ? basePrice : adminPrice as number;
 
           await transactionService.approveSellTransaction({
             transactionId: transaction.id,
-            poolId: isDirectAsset ? null : selectedPool!.id,
-            pricePerToken: finalPrice,
-            poolReduction: poolImpact?.poolReduction || 0,
+            poolId: selectedPool?.id ?? '', // Empty string for direct assets
+            pricePerToken,
+            poolReduction: poolImpact?.poolReduction ?? 0,
             userTokens: transaction.amount
           });
-        } else {
-          console.log('Approving buy transaction with values:', {
-            transactionId: transaction.id,
-            poolId: isDirectAsset || transaction.type === 'withdraw' ? null : selectedPool!.id,
-            pricePerToken: finalPrice,
-            paymentAmount: transaction.amount * finalPrice
-          });
+        } else if (transaction.type === 'buy') {
+          // For non-direct assets, we need a pool and its main asset
+          if (!isDirectAsset) {
+            if (!selectedPool) {
+              throw new Error('Pool is required for non-direct assets');
+            }
+            if (!selectedPool.main_asset) {
+              throw new Error('Selected pool is missing main asset information');
+            }
+            // Validate admin price for non-direct assets
+            if (adminPrice === null) {
+              throw new Error('Admin price is required for non-direct assets');
+              return;
+            }
+
+            // At this point, we know main_asset exists and has all required properties
+            const mainAsset = selectedPool.main_asset as Required<NonNullable<Pool['main_asset']>>;
+            if (!mainAsset.price_per_token) {
+              throw new Error('Selected pool main asset is missing price information');
+            }
+          }
+
+          // At this point, for non-direct assets, we know adminPrice is not null
+          const pricePerToken = isDirectAsset ? basePrice : adminPrice as number;
 
           await transactionService.approveBuyTransaction({
             transactionId: transaction.id,
-            poolId: isDirectAsset || transaction.type === 'withdraw' ? null : selectedPool!.id,
-            pricePerToken: finalPrice,
-            paymentAmount: transaction.amount * finalPrice
+            poolId: selectedPool?.id ?? '', // Empty string for direct assets
+            pricePerToken,
+            paymentAmount: transaction.amount * pricePerToken
           });
         }
 
@@ -200,12 +297,21 @@ export const PendingTransactions: React.FC = () => {
     fromPool: number, 
     fromOffering: number
   ) => {
+    // Early return if no main asset
+    if (!pool.main_asset) {
+      console.error('Pool main asset is missing');
+      return;
+    }
+
+    // At this point, we know main_asset exists and has all required properties
+    const mainAsset = pool.main_asset as Required<NonNullable<Pool['main_asset']>>;
+
     // Calculate the total payment amount
     const paymentAmount = transaction.amount * pricePerToken;
 
     // For sell transactions, calculate how much of the main asset (BTC/HONEY) the pool needs to pay
     const mainAssetAmount = transaction.type === 'sell' 
-      ? paymentAmount / pool.main_asset.price_per_token 
+      ? paymentAmount / mainAsset.price_per_token
       : fromPool * pricePerToken;
 
     const impact: PoolImpact = {
@@ -216,13 +322,6 @@ export const PendingTransactions: React.FC = () => {
       fromPool,
       fromOffering
     };
-
-    console.log('Pool Impact Calculation:', {
-      transaction,
-      paymentAmount,
-      mainAssetAmount,
-      impact
-    });
 
     setPoolImpact(impact);
   };
@@ -455,11 +554,13 @@ export const PendingTransactions: React.FC = () => {
               <div className="text-gray-400">Pool Balances:</div>
               {transaction.type === 'buy' ? (
                 <>
-                  <div className="flex justify-between items-center">
-                    <span className="text-green-400">
-                      + {formatCurrency(poolImpact.poolReduction)} in {selectedPool.main_asset.symbol}
-                    </span>
-                  </div>
+                  {selectedPool.main_asset && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-green-400">
+                        + {formatCurrency(poolImpact.poolReduction)} in {selectedPool.main_asset.symbol}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center">
                     <span className="text-red-400">
                       - {Number(poolImpact.fromPool).toLocaleString()} {transaction.asset_symbol}
@@ -480,14 +581,20 @@ export const PendingTransactions: React.FC = () => {
                 <>
                   <div className="flex justify-between items-center">
                     <span className="text-green-400">
-                      + {transaction.amount} {transaction.asset_symbol} (+{formatCurrency(transaction.amount * adminPrice)} USD)
+                      + {transaction.amount} {transaction.asset_symbol} 
+                      {adminPrice !== null && (
+                        <> (+{formatCurrency(transaction.amount * adminPrice)} USD)</>
+                      )}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-red-400">
-                      - {Number(poolImpact.poolReduction).toFixed(selectedPool.type === 'bitcoin' ? 8 : 2)} {selectedPool.main_asset.symbol} (-{formatCurrency(poolImpact.poolReduction * selectedPool.main_asset.price_per_token)} USD)
-                    </span>
-                  </div>
+                  {selectedPool.main_asset && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-red-400">
+                        - {Number(poolImpact.poolReduction).toFixed(selectedPool.type === 'bitcoin' ? 8 : 2)} {selectedPool.main_asset.symbol} 
+                        (-{formatCurrency(poolImpact.poolReduction * selectedPool.main_asset.price_per_token)} USD)
+                      </span>
+                    </div>
+                  )}
                 </>
               )}
             </div>

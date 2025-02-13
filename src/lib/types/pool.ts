@@ -10,6 +10,21 @@ export interface Pool {
   totalValueLocked: number;
   createdAt: string;
   updatedAt: string;
+  main_asset?: {
+    id: string;
+    symbol: string;
+    name: string;
+    price_per_token: number;
+  };
+  pool_assets?: Array<{
+    balance: number;
+    asset: {
+      id: string;
+      symbol: string;
+      name: string;
+      price_per_token: number;
+    };
+  }>;
 }
 
 export interface PoolBalance {

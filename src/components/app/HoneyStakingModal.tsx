@@ -33,7 +33,7 @@ const Tooltip: React.FC<TooltipProps> = ({ content }) => (
   </div>
 );
 
-const updatePoolAfterStaking = async (poolId: string, amount: number, pricePerToken: number) => {
+const updatePoolAfterStaking = async (poolId: string, amount: number, pricePerToken: number, honeyAsset: ExtendedAsset) => {
   try {
     // 1. Update or insert pool_assets record
     const { error: poolAssetsError } = await supabase
@@ -53,7 +53,7 @@ const updatePoolAfterStaking = async (poolId: string, amount: number, pricePerTo
     const { error: poolError } = await supabase
       .from('pools')
       .update({
-        total_value_locked: supabase.sql`total_value_locked + ${amount * pricePerToken}`
+        total_value_locked: supabase.rpc('increment_pool_tvl', { amount: amount * pricePerToken })
       })
       .eq('id', poolId);
 
@@ -133,7 +133,7 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
       const poolData = honeyPool?.data ?? null;
 
       if (poolData) {
-        await updatePoolAfterStaking(poolData.id, numAmount, pricePerToken);
+        await updatePoolAfterStaking(poolData.id, numAmount, pricePerToken, honeyAsset);
       }
 
       setShowConfirmation(false);

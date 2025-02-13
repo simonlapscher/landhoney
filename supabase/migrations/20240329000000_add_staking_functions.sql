@@ -1,3 +1,21 @@
+-- Function to get pool ID for an asset
+CREATE OR REPLACE FUNCTION get_pool_for_asset(p_asset_symbol TEXT)
+RETURNS UUID AS $$
+DECLARE
+  v_pool_id UUID;
+BEGIN
+  SELECT p.id INTO v_pool_id
+  FROM pools p
+  WHERE p.type = CASE 
+    WHEN p_asset_symbol IN ('HONEY', 'HONEYX') THEN 'honey'
+    WHEN p_asset_symbol IN ('BTC', 'BTCX') THEN 'bitcoin'
+    ELSE NULL
+  END;
+  
+  RETURN v_pool_id;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Function to handle Honey staking
 CREATE OR REPLACE FUNCTION stake_honey(
   p_user_id UUID,
@@ -8,7 +26,11 @@ CREATE OR REPLACE FUNCTION stake_honey(
 ) RETURNS transactions AS $$
 DECLARE
   v_transaction transactions;
+  v_pool_id UUID;
 BEGIN
+  -- Get the pool ID for Honey
+  SELECT get_pool_for_asset('HONEY') INTO v_pool_id;
+
   -- Check if user has enough HONEY balance
   IF NOT EXISTS (
     SELECT 1 FROM user_balances 
@@ -40,7 +62,8 @@ BEGIN
     jsonb_build_object(
       'reference', CONCAT('STAKE_', extract(epoch from now())),
       'fee_usd', 0,
-      'payment_method', 'USD'
+      'payment_method', 'USD',
+      'pool_id', v_pool_id
     ),
     NOW(),
     NOW()
@@ -90,7 +113,11 @@ CREATE OR REPLACE FUNCTION unstake_honey(
 ) RETURNS transactions AS $$
 DECLARE
   v_transaction transactions;
+  v_pool_id UUID;
 BEGIN
+  -- Get the pool ID for Honey
+  SELECT get_pool_for_asset('HONEY') INTO v_pool_id;
+
   -- Check if user has enough HONEYX balance
   IF NOT EXISTS (
     SELECT 1 FROM user_balances 
@@ -122,7 +149,8 @@ BEGIN
     jsonb_build_object(
       'reference', CONCAT('UNSTAKE_', extract(epoch from now())),
       'fee_usd', 0,
-      'payment_method', 'USD'
+      'payment_method', 'USD',
+      'pool_id', v_pool_id
     ),
     NOW(),
     NOW()
@@ -160,4 +188,41 @@ BEGIN
 
   RETURN v_transaction;
 END;
-$$ LANGUAGE plpgsql; 
+$$ LANGUAGE plpgsql;
+
+-- Create function to update TVL after transactions
+CREATE OR REPLACE FUNCTION update_tvl_after_transaction()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Only handle completed stake/unstake transactions
+  IF NEW.status = 'completed' AND NEW.type IN ('stake', 'unstake') THEN
+    -- Get pool ID from transaction metadata
+    DECLARE
+      v_pool_id UUID := (NEW.metadata->>'pool_id')::UUID;
+      v_amount NUMERIC := NEW.amount;
+      v_price_per_token NUMERIC := NEW.price_per_token;
+    BEGIN
+      IF v_pool_id IS NOT NULL THEN
+        -- For unstaking, we need to subtract from TVL
+        IF NEW.type = 'unstake' THEN
+          v_amount := -v_amount;
+        END IF;
+
+        -- Update pool TVL
+        UPDATE pools
+        SET total_value_locked = total_value_locked + (v_amount * v_price_per_token)
+        WHERE id = v_pool_id;
+      END IF;
+    END;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger for TVL updates
+DROP TRIGGER IF EXISTS update_tvl_after_transaction_trigger ON transactions;
+CREATE TRIGGER update_tvl_after_transaction_trigger
+  AFTER INSERT OR UPDATE ON transactions
+  FOR EACH ROW
+  EXECUTE FUNCTION update_tvl_after_transaction(); 

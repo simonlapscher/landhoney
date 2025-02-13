@@ -52,6 +52,7 @@ export interface ExtendedAsset {
   price_per_token: number;
   created_at: string;
   updated_at: string;
+  main_image: string;
 }
 
 export interface SimpleAsset {
@@ -59,6 +60,7 @@ export interface SimpleAsset {
   symbol: string;
   name: string;
   price_per_token: number;
+  type: 'debt' | 'commodity' | 'cash';
 }
 
 export interface PoolBalance {

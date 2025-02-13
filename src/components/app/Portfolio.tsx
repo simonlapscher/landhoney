@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { OrderDetailPopup } from './OrderDetailPopup';
 import { transactionService } from '../../lib/services/transactionService';
 import { useAuth } from '../../lib/context/AuthContext';
-import { BaseAsset, DebtAsset, Asset } from '../../lib/types/asset';
+import { BaseAsset, DebtAsset, Asset as AssetType } from '../../lib/types/asset';
 import { Transaction as BaseTransaction } from '../../lib/types/transaction';
 import { PortfolioAsset } from '../../types/portfolio';
 import { HoneyStakingModal } from './HoneyStakingModal';
@@ -101,14 +101,14 @@ const isDebtAsset = (asset: ExtendedAsset): asset is ExtendedAsset & { type: 'de
   return asset.type === 'debt';
 };
 
-// First, let's add proper type safety
-type AssetType = 'cash' | 'debt' | 'commodity';
+// Remove or comment out the local Asset interface since we're using AssetType
+// type AssetType = 'cash' | 'debt' | 'commodity';
 
-interface Asset {
-  symbol: string;
-  type: AssetType;
-  // ... other fields
-}
+// interface Asset {
+//   symbol: string;
+//   type: AssetType;
+//   // ... other fields
+// }
 
 // In your mapping function where the balances are processed
 const processBalances = (rawBalances: any[]) => {
@@ -306,7 +306,7 @@ export const Portfolio: React.FC = () => {
       }, []);
 
       // Add USD with zero balance if it doesn't exist
-      if (!processedBalances.some(b => b.asset.symbol === 'USD') && usdAsset) {
+      if (!processedBalances.some((b: PortfolioBalance) => b.asset.symbol === 'USD') && usdAsset) {
         processedBalances.unshift({
           id: 'usd-placeholder',
           user_id: user.id,
@@ -379,10 +379,18 @@ export const Portfolio: React.FC = () => {
 
         setTransactions(mappedTransactions);
         setStakingInfo(stakingData);
-        setBtcStakingInfo(btcData);
+        if (btcData) {
+          const formattedBtcData: BitcoinStakingInfo = {
+            btcXBalance: btcData.bitcoinXBalance,
+            stakingPercentage: btcData.stakingPercentage
+          };
+          setBtcStakingInfo(formattedBtcData);
+        } else {
+          setBtcStakingInfo(null);
+        }
         
         // Find BTC data from balances
-        const btcBalanceData = processedBalances.find(b => b.asset.symbol === 'BTC');
+        const btcBalanceData = processedBalances.find((b: PortfolioBalance) => b.asset.symbol === 'BTC');
         setBtcBalance(btcBalanceData?.balance || 0);
         // Use the BTC asset from balances data instead of staking data
         setBtcAsset(btcBalanceData?.asset || null);
@@ -549,10 +557,19 @@ export const Portfolio: React.FC = () => {
           </div>
         </div>
 
+        {/* Table Headers */}
+        <div className="grid grid-cols-[minmax(250px,2fr)_minmax(200px,1.5fr)_minmax(150px,1fr)_minmax(100px,1fr)_minmax(200px,1fr)] gap-4 px-4 py-2 text-light/60">
+          <div className="text-left">Name</div>
+          <div className="text-left">Balance</div>
+          <div className="text-left">Current Price</div>
+          <div className="text-left">APR</div>
+          <div className="text-left">Actions</div>
+        </div>
+
         {/* Assets List */}
-        <div className="space-y-4">
+        <div className="space-y-2">
           {displayBalances.map(balance => (
-            <div key={balance.asset_id} className="grid grid-cols-1 p-4 hover:bg-light/5">
+            <div key={balance.asset_id} className="grid grid-cols-1 p-3 hover:bg-light/5">
               <div className="grid grid-cols-[minmax(250px,2fr)_minmax(200px,1.5fr)_minmax(150px,1fr)_minmax(100px,1fr)_minmax(200px,1fr)] gap-4 items-center">
                 <div className="flex items-center">
                   <div className="relative">
@@ -621,7 +638,7 @@ export const Portfolio: React.FC = () => {
                   </div>
                   <div className="text-sm text-light/60 truncate">
                     {balance.asset.symbol === 'USD' 
-                      ? formatTokenAmount(balance.balance, 2)
+                      ? formatTokenAmount(balance.balance)
                       : formatTokenAmount(balance.balance)
                     } {balance.asset.symbol}
                   </div>
@@ -663,9 +680,9 @@ export const Portfolio: React.FC = () => {
                           background: 'linear-gradient(90deg, #F7931A 0%, #FFAB4A 100%)'
                         }}
                       >
-                        {btcStakingInfo?.bitcoinXBalance > 0 ? 'Stake More' : 'Stake'}
+                        {(btcStakingInfo && btcStakingInfo.btcXBalance > 0) ? 'Stake More' : 'Stake'}
                       </button>
-                      {btcStakingInfo?.bitcoinXBalance > 0 && (
+                      {btcStakingInfo && btcStakingInfo.btcXBalance > 0 && (
                         <button
                           onClick={() => setShowBitcoinUnstakingModal(true)}
                           className="whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
@@ -990,7 +1007,12 @@ export const Portfolio: React.FC = () => {
           <OrderDetailPopup
             isOpen={selectedTransaction !== null}
             onClose={() => setSelectedTransaction(null)}
-            transaction={selectedTransaction}
+            transaction={{
+              ...selectedTransaction,
+              type: selectedTransaction.type === 'deposit' || selectedTransaction.type === 'withdraw'
+                ? 'buy'  // Map deposit/withdraw to buy for display purposes
+                : selectedTransaction.type
+            }}
           />
         )}
 
@@ -1010,6 +1032,7 @@ export const Portfolio: React.FC = () => {
               onSuccess={() => {
                 fetchPortfolioData(true);
               }}
+              honeyAsset={selectedHoneyAsset.asset}
             />
             <HoneyUnstakingModal
               isOpen={showUnstakingModal}
@@ -1034,8 +1057,8 @@ export const Portfolio: React.FC = () => {
         <BitcoinStakingModal
           isOpen={showBitcoinStakingModal}
           onClose={() => setShowBitcoinStakingModal(false)}
-          bitcoinBalance={btcBalance - (btcStakingInfo?.bitcoinXBalance || 0)}
-          bitcoinXBalance={btcStakingInfo?.bitcoinXBalance || 0}
+          bitcoinBalance={btcBalance - (btcStakingInfo?.btcXBalance || 0)}
+          bitcoinXBalance={btcStakingInfo?.btcXBalance || 0}
           stakingPercentage={btcStakingInfo?.stakingPercentage || 0}
           pricePerToken={btcAsset?.price_per_token || 0}
           userId={user?.id || ''}
@@ -1048,7 +1071,7 @@ export const Portfolio: React.FC = () => {
           isOpen={showBitcoinUnstakingModal}
           onClose={() => setShowBitcoinUnstakingModal(false)}
           bitcoinBalance={btcBalance}
-          bitcoinXBalance={btcStakingInfo?.bitcoinXBalance || 0}
+          bitcoinXBalance={btcStakingInfo?.btcXBalance || 0}
           stakingPercentage={btcStakingInfo?.stakingPercentage || 0}
           pricePerToken={btcAsset?.price_per_token || 0}
           userId={user?.id || ''}
@@ -1063,13 +1086,13 @@ export const Portfolio: React.FC = () => {
             <DepositModal
               isOpen={showDepositModal}
               onClose={() => setShowDepositModal(false)}
-              asset={selectedAsset}
+              asset={selectedAsset as unknown as AssetType}
               onSuccess={handleTransactionCreated}
             />
             <WithdrawModal
               isOpen={showWithdrawModal}
               onClose={() => setShowWithdrawModal(false)}
-              asset={selectedAsset}
+              asset={selectedAsset as unknown as AssetType}
               balance={selectedBalance}
               onSuccess={handleTransactionCreated}
             />
@@ -1105,6 +1128,7 @@ export const Portfolio: React.FC = () => {
           stakingPercentage={stakingInfo?.stakingPercentage || 0}
           pricePerToken={honeyAsset?.price_per_token || 0}
           userId={user?.id || ''}
+          honeyAsset={honeyAsset as ExtendedAsset}
         />
         <HoneyUnstakingModal
           isOpen={showHoneyUnstakingModal}

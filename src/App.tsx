@@ -105,7 +105,6 @@ const App: React.FC = () => {
               path="liquid-reserve" 
               element={
                 <React.Suspense fallback={<div>Loading...</div>}>
-                  {console.log('Rendering LiquidReserve route')}
                   <LiquidReserve />
                 </React.Suspense>
               } 

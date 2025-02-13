@@ -93,7 +93,7 @@ export const SellWidget: React.FC<SellWidgetProps> = ({ asset, onClose, userBala
     return type === 'token' ? amount.toFixed(4) : amount.toFixed(2);
   };
 
-  if (widgetState === 'confirmation') {
+  if (showSuccess && widgetState === 'confirmation') {
     return (
       <div className="max-w-lg mx-auto bg-dark/95 p-6 rounded-2xl shadow-xl border border-light/10">
         <div className="text-center">

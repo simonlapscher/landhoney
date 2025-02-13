@@ -6,13 +6,39 @@ import { useAuth } from '../../lib/context/AuthContext';
 import { BitcoinStakingModal } from '../../components/app/BitcoinStakingModal';
 import { HoneyStakingModal } from '../../components/app/HoneyStakingModal';
 import { supabase } from '../../lib/supabase';
-import { StakingInfo, BitcoinStakingInfo } from '../../components/app/Portfolio';
+import { StakingInfo, BitcoinStakingInfo, DatabasePool, DatabaseAsset, DatabaseBalance } from '../../lib/types/portfolio';
 import { transactionService } from '../../lib/services/transactionService';
 import { ExtendedAsset } from '../../lib/types/asset';
 
+interface PoolStats {
+  mainAssetBalance: number;
+  debtAssets: Array<{
+    balance: number;
+    asset: DatabaseAsset;
+  }>;
+  totalDebtValue: number;
+  totalValueLocked: number;
+}
+
+interface SupabaseUserBalance {
+  balance: number;
+  assets: {
+    price_per_token: number;
+  };
+}
+
+interface SupabaseStakedBalance {
+  asset_id: string;
+  balance: number;
+  assets: {
+    symbol: string;
+    price_per_token: number;
+  };
+}
+
 export const LiquidReserve: React.FC = () => {
   const { user } = useAuth();
-  const [pools, setPools] = useState<Pool[]>([]);
+  const [pools, setPools] = useState<DatabasePool[]>([]);
   const [poolBalances, setPoolBalances] = useState<Record<string, PoolBalance[]>>({});
   const [showBitcoinStakingModal, setShowBitcoinStakingModal] = useState(false);
   const [showHoneyStakingModal, setShowHoneyStakingModal] = useState(false);
@@ -82,9 +108,9 @@ export const LiquidReserve: React.FC = () => {
               tvl: pool.total_value_locked
             });
           });
+          
+          setPools(data as unknown as DatabasePool[]);
         }
-        
-        setPools(data || []);
       } catch (err) {
         console.error('Error fetching pool data:', err);
       }
@@ -114,11 +140,14 @@ export const LiquidReserve: React.FC = () => {
           .eq('assets.symbol', 'HONEY')
           .single();
 
+        const typedBtcBalance = btcBalance as unknown as SupabaseUserBalance;
+        const typedHoneyBalance = honeyBalance as unknown as SupabaseUserBalance;
+
         setUserBalances({
-          bitcoin: btcBalance?.balance || 0,
-          honey: honeyBalance?.balance || 0,
-          bitcoinPrice: btcBalance?.assets.price_per_token || 0,
-          honeyPrice: honeyBalance?.assets.price_per_token || 0
+          bitcoin: typedBtcBalance?.balance || 0,
+          honey: typedHoneyBalance?.balance || 0,
+          bitcoinPrice: typedBtcBalance?.assets?.price_per_token || 0,
+          honeyPrice: typedHoneyBalance?.assets?.price_per_token || 0
         });
       } catch (err) {
         console.error('Error fetching user balances:', err);
@@ -128,17 +157,30 @@ export const LiquidReserve: React.FC = () => {
     fetchUserBalances();
   }, [user, refreshTrigger]);
 
-  useEffect(() => {
-    const fetchStakingInfo = async () => {
-      if (!user?.id) return;
-      
-      const honeyInfo = await transactionService.getHoneyStakingInfo(user.id);
-      const btcInfo = await transactionService.getBitcoinStakingInfo(user.id);
-      
-      setStakingInfo(honeyInfo);
-      setBtcStakingInfo(btcInfo);
-    };
+  const fetchStakingInfo = async () => {
+    if (!user?.id) return;
+    
+    const honeyInfo = await transactionService.getHoneyStakingInfo(user.id);
+    const btcInfo = await transactionService.getBitcoinStakingInfo(user.id);
+    
+    if (honeyInfo) {
+      setStakingInfo({
+        honeyBalance: honeyInfo.honeyBalance,
+        honeyXBalance: honeyInfo.honeyXBalance,
+        stakingPercentage: honeyInfo.stakingPercentage
+      });
+    }
+    
+    if (btcInfo) {
+      setBtcStakingInfo({
+        bitcoinBalance: btcInfo.bitcoinBalance,
+        bitcoinXBalance: btcInfo.bitcoinXBalance,
+        stakingPercentage: btcInfo.stakingPercentage
+      });
+    }
+  };
 
+  useEffect(() => {
     fetchStakingInfo();
   }, [user?.id]);
 
@@ -175,7 +217,7 @@ export const LiquidReserve: React.FC = () => {
     return icons[type as keyof typeof icons];
   };
 
-  const calculatePoolBalances = (pool: Pool) => {
+  const calculatePoolBalances = (pool: DatabasePool): PoolStats => {
     // If no pool assets but has TVL, use that for main asset calculation
     if (!pool.pool_assets || pool.pool_assets.length === 0) {
       const mainAssetBalance = pool.total_value_locked / pool.main_asset.price_per_token;
@@ -202,7 +244,7 @@ export const LiquidReserve: React.FC = () => {
     const mainAssetValue = mainAssetBalance * pool.main_asset.price_per_token;
 
     // Calculate total debt value
-    const totalDebtValue = debtAssets.reduce((sum, pa) => 
+    const totalDebtValue = debtAssets.reduce((sum: number, pa) => 
       sum + (pa.balance * pa.asset.price_per_token), 0
     );
 
@@ -217,9 +259,12 @@ export const LiquidReserve: React.FC = () => {
     };
   };
 
-  const calculatePoolRatios = (pool: Pool, mainAssetBalance: number, debtAssets: any[]) => {
+  const calculatePoolRatios = (pool: DatabasePool, mainAssetBalance: number, debtAssets: Array<{
+    balance: number;
+    asset: DatabaseAsset;
+  }>) => {
     const mainAssetValue = mainAssetBalance * pool.main_asset.price_per_token;
-    const debtAssetsValue = debtAssets.reduce((sum, pa) => 
+    const debtAssetsValue = debtAssets.reduce((sum: number, pa) => 
       sum + (pa.balance * pa.asset.price_per_token), 0
     );
     
@@ -245,72 +290,102 @@ export const LiquidReserve: React.FC = () => {
         `)
         .in('assets.symbol', ['BTCX', 'HONEYX']);
 
+      if (!stakedBalances) return;
+
+      const typedStakedBalances = stakedBalances as unknown as SupabaseStakedBalance[];
+
       // Group staked balances by asset
-      const totalStaked = stakedBalances?.reduce((acc, balance) => {
+      const totalStaked = typedStakedBalances.reduce((acc: Record<string, { total: number; mainAssetSymbol: string }>, balance) => {
         const isHoney = balance.assets.symbol === 'HONEYX';
-        const poolType = isHoney ? 'honey' : 'bitcoin';
-        if (!acc[poolType]) {
-          acc[poolType] = {
-            total: 0,
-            mainAssetSymbol: isHoney ? 'HONEY' : 'BTC'
-          };
+        const key = isHoney ? 'honey' : 'bitcoin';
+        const mainAssetSymbol = isHoney ? 'HONEY' : 'BTC';
+        
+        if (!acc[key]) {
+          acc[key] = { total: 0, mainAssetSymbol };
         }
-        acc[poolType].total += balance.balance;
+        acc[key].total += balance.balance;
         return acc;
-      }, {} as Record<string, { total: number, mainAssetSymbol: string }>);
+      }, {});
 
-      // For each pool, update TVL without modifying liquid reserves
-      for (const [poolType, staked] of Object.entries(totalStaked)) {
-        const { data: pool } = await supabase
-          .from('pools')
-          .select(`
-            id, 
-            main_asset:assets!pools_main_asset_id_fkey (
-              id,
-              price_per_token
-            ),
-            pool_assets (
-              balance,
-              asset:assets (
-                id,
-                symbol,
-                price_per_token
-              )
-            )
-          `)
-          .eq('type', poolType)
-          .single();
+      // Update pool balances based on staked amounts
+      await Promise.all(
+        Object.entries(totalStaked).map(async ([poolType, { total, mainAssetSymbol }]) => {
+          const pool = pools.find(p => p.type === poolType);
+          if (!pool) return;
 
-        if (pool) {
-          // Calculate total value including both staked and liquid
-          const mainAsset = pool.pool_assets?.find(
-            pa => pa.asset.id === pool.main_asset.id
-          );
-          const liquidValue = mainAsset 
-            ? mainAsset.balance * pool.main_asset.price_per_token 
-            : 0;
-          const stakedValue = staked.total * pool.main_asset.price_per_token;
-          const totalValue = liquidValue + stakedValue;
+          const { data: mainAsset } = await supabase
+            .from('assets')
+            .select('id, price_per_token')
+            .eq('symbol', mainAssetSymbol)
+            .single();
 
-          // Only update TVL, don't modify pool_assets
-          await supabase
-            .from('pools')
-            .update({
-              total_value_locked: totalValue,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', pool.id);
-        }
-      }
+          if (!mainAsset) return;
+
+          // Update pool assets with new staked amount
+          const { error } = await supabase
+            .from('pool_assets')
+            .upsert({
+              pool_id: pool.id,
+              asset_id: mainAsset.id,
+              balance: total
+            }, {
+              onConflict: 'pool_id,asset_id'
+            });
+
+          if (error) {
+            console.error('Error updating pool assets:', error);
+          }
+        })
+      );
+
+      // Refresh pool data
+      setRefreshTrigger(prev => prev + 1);
     } catch (err) {
       console.error('Error syncing pool balances:', err);
     }
   };
 
-  // Call this function when component mounts and after any staking/unstaking
-  useEffect(() => {
-    syncPoolBalances();
-  }, [refreshTrigger]);
+  const renderStakingModals = () => {
+    if (!user?.id || !stakingInfo || !btcStakingInfo) return null;
+
+    return (
+      <>
+        {honeyAsset && (
+          <HoneyStakingModal
+            isOpen={showHoneyStakingModal}
+            onClose={() => setShowHoneyStakingModal(false)}
+            onSuccess={() => {
+              fetchStakingInfo();
+              syncPoolBalances();
+              handleStakingSuccess();
+            }}
+            honeyBalance={userBalances.honey}
+            honeyXBalance={stakingInfo.honeyXBalance}
+            stakingPercentage={stakingInfo.stakingPercentage}
+            pricePerToken={userBalances.honeyPrice}
+            userId={user.id}
+            honeyAsset={honeyAsset}
+          />
+        )}
+        {btcAsset && (
+          <BitcoinStakingModal
+            isOpen={showBitcoinStakingModal}
+            onClose={() => setShowBitcoinStakingModal(false)}
+            onSuccess={() => {
+              fetchStakingInfo();
+              syncPoolBalances();
+              handleStakingSuccess();
+            }}
+            bitcoinBalance={userBalances.bitcoin}
+            bitcoinXBalance={btcStakingInfo.bitcoinXBalance}
+            stakingPercentage={btcStakingInfo.stakingPercentage}
+            pricePerToken={userBalances.bitcoinPrice}
+            userId={user.id}
+          />
+        )}
+      </>
+    );
+  };
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
@@ -431,33 +506,7 @@ export const LiquidReserve: React.FC = () => {
         })}
       </div>
 
-      <HoneyStakingModal
-        isOpen={showHoneyStakingModal}
-        onClose={() => setShowHoneyStakingModal(false)}
-        onSuccess={() => {
-          setShowHoneyStakingModal(false);
-          fetchStakingInfo(); // Refresh data
-        }}
-        honeyBalance={stakingInfo?.honeyBalance || 0}
-        honeyXBalance={stakingInfo?.honeyXBalance || 0}
-        stakingPercentage={stakingInfo?.stakingPercentage || 0}
-        pricePerToken={honeyAsset?.price_per_token || 0}
-        userId={user?.id || ''}
-      />
-
-      <BitcoinStakingModal
-        isOpen={showBitcoinStakingModal}
-        onClose={() => setShowBitcoinStakingModal(false)}
-        onSuccess={() => {
-          setShowBitcoinStakingModal(false);
-          fetchStakingInfo(); // Refresh data
-        }}
-        bitcoinBalance={btcStakingInfo?.bitcoinBalance || 0}
-        bitcoinXBalance={btcStakingInfo?.bitcoinXBalance || 0}
-        stakingPercentage={btcStakingInfo?.stakingPercentage || 0}
-        pricePerToken={btcAsset?.price_per_token || 0}
-        userId={user?.id || ''}
-      />
+      {renderStakingModals()}
     </div>
   );
 }; 
