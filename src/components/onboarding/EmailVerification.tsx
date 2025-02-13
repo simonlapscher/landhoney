@@ -11,45 +11,52 @@ export const EmailVerification: React.FC = () => {
   useEffect(() => {
     const handleEmailVerification = async () => {
       try {
-        // Check for error in hash
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        // Parse both hash and query parameters
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#*/, ''));
+        const queryParams = new URLSearchParams(window.location.search);
+
+        // Check for error in hash parameters
         if (hashParams.get('error')) {
           throw new Error(hashParams.get('error_description') || 'Verification failed');
         }
 
-        // Get token from URL
-        const queryParams = new URLSearchParams(window.location.search);
-        const token = queryParams.get('token');
+        // Try to get token from different possible locations
+        const token = queryParams.get('token') || // From query params
+                     hashParams.get('access_token'); // From hash params
         
+        console.log('Verification process starting');
+        console.log('Hash params present:', hashParams.toString() ? 'yes' : 'no');
+        console.log('Query params present:', queryParams.toString() ? 'yes' : 'no');
+        console.log('Token found:', token ? 'yes' : 'no');
+
         if (!token) {
-          console.error('No token found in URL');
-          throw new Error('Verification link is invalid or has expired');
+          throw new Error('No verification token found');
         }
 
-        console.log('Starting verification process');
+        // If we have an access_token in the hash, we can use it directly
+        if (hashParams.get('access_token')) {
+          const { data: { session }, error: sessionError } = await supabase.auth.setSession({
+            access_token: token,
+            refresh_token: hashParams.get('refresh_token') || token
+          });
 
-        // Verify the token
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-          token_hash: token,
-          type: 'signup'
-        });
+          if (sessionError) throw sessionError;
+          if (!session?.user) throw new Error('No user found in session');
+        } else {
+          // Otherwise, verify the signup token
+          const { error: verifyError } = await supabase.auth.verifyOtp({
+            token_hash: token,
+            type: 'signup'
+          });
 
-        if (verifyError) {
-          console.error('Verification error:', verifyError);
-          throw verifyError;
+          if (verifyError) throw verifyError;
         }
 
         // Get the current session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-        if (sessionError) {
-          console.error('Session error:', sessionError);
-          throw sessionError;
-        }
-
-        if (!session?.user) {
-          throw new Error('No user found after verification');
-        }
+        if (sessionError) throw sessionError;
+        if (!session?.user) throw new Error('No user found after verification');
 
         console.log('User verified:', session.user.id);
 
@@ -60,14 +67,13 @@ export const EmailVerification: React.FC = () => {
           .eq('user_id', session.user.id)
           .single();
 
-        if (fetchError && fetchError.code !== 'PGRST116') { // Not found error
+        if (fetchError && fetchError.code !== 'PGRST116') {
           console.error('Profile fetch error:', fetchError);
           throw fetchError;
         }
 
         if (!existingProfile) {
           console.log('Creating new profile for user:', session.user.id);
-          // Create new profile
           const { error: insertError } = await supabase
             .from('profiles')
             .insert({
@@ -82,14 +88,13 @@ export const EmailVerification: React.FC = () => {
           }
         }
 
-        // Update user metadata to remove the flag
+        // Update user metadata
         const { error: updateError } = await supabase.auth.updateUser({
           data: { needs_profile_creation: false }
         });
 
         if (updateError) {
           console.error('Error updating user metadata:', updateError);
-          // Don't throw here, as profile is already created
         }
 
         // Redirect to country selection
