@@ -11,45 +11,28 @@ export const EmailVerification: React.FC = () => {
   useEffect(() => {
     const handleEmailVerification = async () => {
       try {
-        // Parse both hash and query parameters
-        const hashParams = new URLSearchParams(window.location.hash.replace(/^#*/, ''));
-        const queryParams = new URLSearchParams(window.location.search);
-
-        // Check for error in hash parameters
-        if (hashParams.get('error')) {
-          throw new Error(hashParams.get('error_description') || 'Verification failed');
-        }
-
-        // Try to get token from different possible locations
-        const token = queryParams.get('token') || // From query params
-                     hashParams.get('access_token'); // From hash params
+        console.log('Starting verification with URL:', window.location.href);
         
-        console.log('Verification process starting');
-        console.log('Hash params present:', hashParams.toString() ? 'yes' : 'no');
-        console.log('Query params present:', queryParams.toString() ? 'yes' : 'no');
-        console.log('Token found:', token ? 'yes' : 'no');
+        // Get token from query parameters
+        const queryParams = new URLSearchParams(window.location.search);
+        const token = queryParams.get('token');
+        const type = queryParams.get('type');
+        
+        console.log('Verification params:', { token: !!token, type });
 
         if (!token) {
           throw new Error('No verification token found');
         }
 
-        // If we have an access_token in the hash, we can use it directly
-        if (hashParams.get('access_token')) {
-          const { data: { session }, error: sessionError } = await supabase.auth.setSession({
-            access_token: token,
-            refresh_token: hashParams.get('refresh_token') || token
-          });
+        // Verify the signup token
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: token,
+          type: type as any || 'signup'
+        });
 
-          if (sessionError) throw sessionError;
-          if (!session?.user) throw new Error('No user found in session');
-        } else {
-          // Otherwise, verify the signup token
-          const { error: verifyError } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: 'signup'
-          });
-
-          if (verifyError) throw verifyError;
+        if (verifyError) {
+          console.error('Verification error:', verifyError);
+          throw verifyError;
         }
 
         // Get the current session
@@ -58,7 +41,7 @@ export const EmailVerification: React.FC = () => {
         if (sessionError) throw sessionError;
         if (!session?.user) throw new Error('No user found after verification');
 
-        console.log('User verified:', session.user.id);
+        console.log('User verified successfully:', session.user.id);
 
         // Check if profile exists
         const { data: existingProfile, error: fetchError } = await supabase
@@ -73,7 +56,7 @@ export const EmailVerification: React.FC = () => {
         }
 
         if (!existingProfile) {
-          console.log('Creating new profile for user:', session.user.id);
+          console.log('Creating new profile');
           const { error: insertError } = await supabase
             .from('profiles')
             .insert({
@@ -84,7 +67,7 @@ export const EmailVerification: React.FC = () => {
 
           if (insertError) {
             console.error('Profile creation error:', insertError);
-            throw new Error('Failed to create profile');
+            throw insertError;
           }
         }
 
@@ -100,7 +83,7 @@ export const EmailVerification: React.FC = () => {
         // Redirect to country selection
         navigate('/onboarding/country');
       } catch (error) {
-        console.error('Email verification error:', error);
+        console.error('Verification error:', error);
         setError(error instanceof Error ? error.message : 'An error occurred during verification');
       } finally {
         setLoading(false);

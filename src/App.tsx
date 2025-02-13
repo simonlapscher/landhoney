@@ -32,6 +32,7 @@ import { ProfilePage } from './components/profile/ProfilePage';
 import { AddAsset } from './pages/admin/AddAsset';
 import { LiquidReserve } from './pages/app/LiquidReserve';
 import { Toaster } from 'react-hot-toast';
+import { AuthCallback } from './components/auth/AuthCallback';
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -60,6 +61,7 @@ const App: React.FC = () => {
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<WelcomeScreen />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
           
           {/* Legal routes */}
           <Route path="/terms" element={<TermsOfService />} />

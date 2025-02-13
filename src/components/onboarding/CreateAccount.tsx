@@ -58,12 +58,14 @@ export const CreateAccount: React.FC = () => {
         ? window.location.origin  // Use localhost URL in development
         : 'https://landhoney.vercel.app';
         
-      // Remove any trailing slashes and don't add a hash
-      const redirectTo = `${currentOrigin}/onboarding/verify`;
+      // Construct the redirect URL with the correct path
+      const redirectTo = `${currentOrigin}/auth/callback`;
       
-      console.log('Environment:', isDevelopment ? 'development' : 'production');
-      console.log('Current hostname:', window.location.hostname);
-      console.log('Redirect URL:', redirectTo);
+      console.log('Signup attempt:', {
+        environment: isDevelopment ? 'development' : 'production',
+        hostname: window.location.hostname,
+        redirectUrl: redirectTo
+      });
       
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
@@ -77,7 +79,7 @@ export const CreateAccount: React.FC = () => {
       });
 
       if (signUpError) {
-        console.error('Signup Error Details:', signUpError);
+        console.error('Signup Error:', signUpError);
         throw signUpError;
       }
 
