@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 export const EmailVerification: React.FC = () => {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const handleEmailVerification = async () => {
@@ -16,6 +17,8 @@ export const EmailVerification: React.FC = () => {
           throw new Error('No user found');
         }
 
+        console.log('Verifying user:', user.id);
+
         // Check if profile exists
         const { data: existingProfile, error: fetchError } = await supabase
           .from('profiles')
@@ -24,10 +27,12 @@ export const EmailVerification: React.FC = () => {
           .single();
 
         if (fetchError && fetchError.code !== 'PGRST116') { // Not found error
+          console.error('Profile fetch error:', fetchError);
           throw fetchError;
         }
 
         if (!existingProfile) {
+          console.log('Creating new profile for user:', user.id);
           // Create new profile
           const { error: insertError } = await supabase
             .from('profiles')
@@ -55,32 +60,45 @@ export const EmailVerification: React.FC = () => {
 
         // Redirect to country selection
         navigate('/onboarding/country');
-      } catch (err) {
-        console.error('Verification error:', err);
-        setError(err instanceof Error ? err.message : 'An error occurred during verification');
+      } catch (error) {
+        console.error('Email verification error:', error);
+        setError(error instanceof Error ? error.message : 'An error occurred during verification');
+      } finally {
+        setLoading(false);
       }
     };
 
     handleEmailVerification();
   }, [navigate]);
 
-  if (error) {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-tertiary-pink mb-4">Verification Error</h2>
-          <p className="text-light/80">{error}</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-light">Verifying your email...</p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <h2 className="text-2xl font-bold text-primary mb-4">Verifying your email...</h2>
-        <p className="text-light/80">Please wait while we complete your registration.</p>
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="text-red-500 mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold text-light mb-2">Verification Error</h2>
+          <p className="text-light/60">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-primary text-dark rounded-lg hover:bg-primary/90"
+          >
+            Try Again
+          </button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  return null;
 }; 

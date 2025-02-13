@@ -61,7 +61,7 @@ export const CreateAccount: React.FC = () => {
         options: {
           emailRedirectTo: redirectTo,
           data: {
-            needs_profile_creation: true // Add metadata to track profile creation
+            needs_profile_creation: true
           }
         }
       });

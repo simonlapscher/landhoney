@@ -181,9 +181,6 @@ export const Portfolio: React.FC = () => {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<SimpleAsset | null>(null);
   const [selectedBalance, setSelectedBalance] = useState<number>(0);
-  const [pools, setPools] = useState<Pool[]>([]);
-  const [poolBalances, setPoolBalances] = useState<Record<string, PoolBalance[]>>({});
-  const [userShares, setUserShares] = useState<Record<string, number>>({});
   const [showHoneyStakingModal, setShowHoneyStakingModal] = useState(false);
   const [showHoneyUnstakingModal, setShowHoneyUnstakingModal] = useState(false);
   const [honeyAsset, setHoneyAsset] = useState<ExtendedAsset | null>(null);
@@ -874,40 +871,6 @@ export const Portfolio: React.FC = () => {
     fetchPortfolioData(true);
   };
 
-  useEffect(() => {
-    const fetchPoolData = async () => {
-      if (!user) return;
-
-      try {
-        const { data: pools } = await supabase.from('pools').select('*');
-        setPools(pools || []);
-
-        // Fetch balances for each pool
-        const balancesPromises = pools?.map(pool => poolService.getPoolBalances(pool.id));
-        const balancesResults = await Promise.all(balancesPromises || []);
-        const balancesMap = Object.fromEntries(
-          pools?.map((pool, i) => [pool.id, balancesResults[i]]) || []
-        );
-        setPoolBalances(balancesMap);
-
-        // Fetch user's staking positions
-        const positions = await poolService.getUserStakingPositions(user.id);
-        const sharesPromises = positions.map(pos => 
-          poolService.calculateUserPoolShare(pos.id)
-        );
-        const shares = await Promise.all(sharesPromises);
-        const sharesMap = Object.fromEntries(
-          positions.map((pos, i) => [pos.poolId, shares[i]])
-        );
-        setUserShares(sharesMap);
-      } catch (err) {
-        console.error('Error fetching pool data:', err);
-      }
-    };
-
-    fetchPoolData();
-  }, [user]);
-
   if (loading && !isRefreshing) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1098,22 +1061,6 @@ export const Portfolio: React.FC = () => {
             />
           </>
         )}
-
-        <div className="space-y-6">
-          <h2 className="text-2xl font-bold text-light">Liquidity Pools</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {pools.map(pool => (
-              <PoolStats
-                key={pool.id}
-                pool={pool}
-                balances={poolBalances[pool.id] || []}
-                userShare={userShares[pool.id]}
-                onStake={() => {/* TODO: Implement staking modal */}}
-                onUnstake={() => {/* TODO: Implement unstaking modal */}}
-              />
-            ))}
-          </div>
-        </div>
 
         {/* Add modals at the bottom of the component */}
         <HoneyStakingModal
