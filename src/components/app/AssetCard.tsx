@@ -17,3 +17,12 @@
     </button>
   </div>
 ) : null} 
+
+interface AssetCardProps {
+  asset: Asset;
+  handleInvestClick: (asset: Asset) => void;
+}
+
+export const AssetCard: React.FC<AssetCardProps> = ({ asset, handleInvestClick }) => {
+  // ... component code
+}; 

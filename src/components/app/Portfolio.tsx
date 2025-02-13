@@ -19,6 +19,7 @@ import { WithdrawModal } from './WithdrawModal';
 import { Pool, PoolBalance } from '../../lib/types/pool';
 import { poolService } from '../../lib/services/poolService';
 import { PoolStats } from './PoolStats';
+import type { SimpleAsset } from '../../lib/types/asset';
 
 interface RawAssetResponse extends BaseAsset {
   debt_assets?: {
@@ -178,7 +179,7 @@ export const Portfolio: React.FC = () => {
   const [btcStakingInfo, setBtcStakingInfo] = useState<BitcoinStakingInfo | null>(null);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const [selectedAsset, setSelectedAsset] = useState<SimpleAsset | null>(null);
   const [selectedBalance, setSelectedBalance] = useState<number>(0);
   const [pools, setPools] = useState<Pool[]>([]);
   const [poolBalances, setPoolBalances] = useState<Record<string, PoolBalance[]>>({});
@@ -822,7 +823,7 @@ export const Portfolio: React.FC = () => {
     );
   };
 
-  const renderAssetActions = (asset: Asset, balance: number) => {
+  const renderAssetActions = (asset: SimpleAsset, balance: number) => {
     if (asset.type === 'cash') {
       return (
         <div className="flex space-x-2">
@@ -1136,4 +1137,8 @@ const getStatusColor = (status: string) => {
     default:
       return 'text-light/60';
   }
+};
+
+const sortByDate = (a: Transaction, b: Transaction) => {
+  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
 }; 

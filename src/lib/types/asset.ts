@@ -30,15 +30,52 @@ export interface DebtAsset extends BaseAsset {
   available_supply: number;
 }
 
+export interface CommodityAsset extends BaseAsset {
+  type: 'commodity';
+  asset_prices: AssetPrice[];
+}
+
+export interface CashAsset extends BaseAsset {
+  type: 'cash';
+}
+
 export interface AssetPrice {
   price: number;
   timestamp: string;
 }
 
-export interface CommodityAsset extends BaseAsset {
-  type: 'commodity';
-  asset_prices: AssetPrice[];
+export interface ExtendedAsset {
+  id: string;
+  symbol: string;
+  name: string;
+  type: string;
+  price_per_token: number;
+  created_at: string;
+  updated_at: string;
 }
+
+export interface SimpleAsset {
+  id: string;
+  symbol: string;
+  name: string;
+  price_per_token: number;
+}
+
+export interface PoolBalance {
+  id: string;
+  balance: number;
+  asset: SimpleAsset;
+  assetId: string;
+}
+
+export interface BitcoinStakingInfo {
+  bitcoinBalance: number;
+  btcXBalance: number;
+  stakingPercentage: number;
+}
+
+// This is our main Asset type
+export type Asset = DebtAsset | CommodityAsset | CashAsset;
 
 export interface AssetBalance {
   id: string;
@@ -50,27 +87,4 @@ export interface AssetBalance {
   last_transaction_at?: string;
   created_at: string;
   updated_at: string;
-}
-
-export interface CashAsset extends BaseAsset {
-  type: 'cash';
-}
-
-export interface Asset {
-  id: string;
-  name: string;
-  description: string;
-  short_description?: string;
-  main_image: string;
-  type: 'debt' | 'commodity' | 'cash';
-  created_at: string;
-  updated_at: string;
-  symbol: string;
-  price_per_token: number;
-  decimals: number;
-  token_supply: number;
-  min_investment: number;
-  max_investment: number;
-}
-
-export type Asset = DebtAsset | CommodityAsset | CashAsset; 
+} 

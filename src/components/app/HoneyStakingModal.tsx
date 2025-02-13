@@ -6,6 +6,7 @@ import { IoMdInformationCircleOutline } from 'react-icons/io';
 import { FiEdit2 } from 'react-icons/fi';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { supabase } from '../../lib/supabase';
+import { ExtendedAsset } from '../../lib/types/asset';
 
 interface HoneyStakingModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface HoneyStakingModalProps {
   pricePerToken: number;
   userId: string;
   onSuccess: () => void;
+  honeyAsset: ExtendedAsset;
 }
 
 interface TooltipProps {
@@ -70,7 +72,8 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
   stakingPercentage,
   pricePerToken,
   userId,
-  onSuccess
+  onSuccess,
+  honeyAsset
 }) => {
   const [amount, setAmount] = useState<string>('');
   const [inputValue, setInputValue] = useState<string>('');
@@ -125,14 +128,12 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
       await transactionService.stakeHoney(userId, numAmount);
       
       // After successful staking, update pool
-      const honeyPool = await supabase
-        .from('pools')
-        .select('id')
-        .eq('type', 'honey')
-        .single();
-        
-      if (honeyPool) {
-        await updatePoolAfterStaking(honeyPool.data.id, numAmount, pricePerToken);
+      const { data: honeyPool } = await supabase.rpc('get_honey_pool');
+      
+      const poolData = honeyPool?.data ?? null;
+
+      if (poolData) {
+        await updatePoolAfterStaking(poolData.id, numAmount, pricePerToken);
       }
 
       setShowConfirmation(false);
