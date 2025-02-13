@@ -11,30 +11,32 @@ export const EmailVerification: React.FC = () => {
   useEffect(() => {
     const handleEmailVerification = async () => {
       try {
-        // Try to get token from both hash and query parameters
+        // Check for error in hash
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        if (hashParams.get('error')) {
+          throw new Error(hashParams.get('error_description') || 'Verification failed');
+        }
+
+        // Get token from URL
         const queryParams = new URLSearchParams(window.location.search);
-        
-        let token = hashParams.get('access_token') || queryParams.get('token');
+        const token = queryParams.get('token');
         
         if (!token) {
           console.error('No token found in URL');
           throw new Error('Verification link is invalid or has expired');
         }
 
-        console.log('Token found:', token ? 'yes' : 'no');
+        console.log('Starting verification process');
 
-        // If token is from query params, verify it first
-        if (queryParams.get('token')) {
-          const { error: verifyError } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: 'signup'
-          });
+        // Verify the token
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: token,
+          type: 'signup'
+        });
 
-          if (verifyError) {
-            console.error('Verification error:', verifyError);
-            throw verifyError;
-          }
+        if (verifyError) {
+          console.error('Verification error:', verifyError);
+          throw verifyError;
         }
 
         // Get the current session
@@ -49,7 +51,7 @@ export const EmailVerification: React.FC = () => {
           throw new Error('No user found after verification');
         }
 
-        console.log('Verifying user:', session.user.id);
+        console.log('User verified:', session.user.id);
 
         // Check if profile exists
         const { data: existingProfile, error: fetchError } = await supabase
@@ -121,12 +123,17 @@ export const EmailVerification: React.FC = () => {
           <div className="text-red-500 mb-4">⚠️</div>
           <h2 className="text-xl font-semibold text-light mb-2">Verification Error</h2>
           <p className="text-light/60">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-4 px-4 py-2 bg-primary text-dark rounded-lg hover:bg-primary/90"
-          >
-            Try Again
-          </button>
+          <div className="mt-4 space-y-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-primary text-dark rounded-lg hover:bg-primary/90"
+            >
+              Try Again
+            </button>
+            <p className="text-sm text-light/60">
+              If the error persists, please request a new verification email.
+            </p>
+          </div>
         </div>
       </div>
     );

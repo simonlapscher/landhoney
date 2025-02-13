@@ -52,9 +52,14 @@ export const CreateAccount: React.FC = () => {
     }
 
     try {
-      // Get the current origin for the correct environment
-      const currentOrigin = window.location.origin;
-      const redirectTo = `${currentOrigin}/onboarding/verify#`;
+      // Get the current origin based on environment
+      const isDevelopment = !import.meta.env.PROD;
+      const currentOrigin = isDevelopment 
+        ? window.location.origin  // Use localhost URL in development
+        : 'https://landhoney.vercel.app';
+        
+      const redirectTo = `${currentOrigin}/onboarding/verify`;
+      console.log('Environment:', isDevelopment ? 'development' : 'production');
       console.log('Redirect URL:', redirectTo);
       
       const { data, error: signUpError } = await supabase.auth.signUp({
