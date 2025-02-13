@@ -34,6 +34,12 @@ export interface PoolBalance {
   balance: number;
   createdAt: string;
   updatedAt: string;
+  asset: {
+    id: string;
+    symbol: string;
+    name: string;
+    price_per_token: number;
+  };
 }
 
 export interface StakingPosition {

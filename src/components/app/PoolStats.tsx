@@ -57,7 +57,7 @@ export const PoolStats: React.FC<PoolStatsProps> = ({
         <div className="text-sm text-light/60">Pool Composition</div>
         {balances.map(balance => (
           <div key={balance.id} className="flex justify-between items-center">
-            <span className="text-light">{balance.asset.symbol}</span>
+            <span className="text-light">{balance.asset?.symbol || 'Unknown'}</span>
             <span className="text-light">{formatCurrency(balance.balance)}</span>
           </div>
         ))}
