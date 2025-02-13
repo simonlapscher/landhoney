@@ -1,29 +1,47 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 
 export const EmailVerification: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const handleEmailVerification = async () => {
       try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError) throw authError;
+        // Get the token from the URL
+        const params = new URLSearchParams(window.location.hash.substring(1));
+        const token = params.get('access_token');
         
-        if (!user) {
+        if (!token) {
+          console.error('No token found in URL');
+          throw new Error('Verification link is invalid or has expired');
+        }
+
+        // Set the session using the token
+        const { data: { session }, error: sessionError } = await supabase.auth.setSession({
+          access_token: token,
+          refresh_token: token
+        });
+
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+          throw sessionError;
+        }
+
+        if (!session?.user) {
           throw new Error('No user found');
         }
 
-        console.log('Verifying user:', user.id);
+        console.log('Verifying user:', session.user.id);
 
         // Check if profile exists
         const { data: existingProfile, error: fetchError } = await supabase
           .from('profiles')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('user_id', session.user.id)
           .single();
 
         if (fetchError && fetchError.code !== 'PGRST116') { // Not found error
@@ -32,12 +50,12 @@ export const EmailVerification: React.FC = () => {
         }
 
         if (!existingProfile) {
-          console.log('Creating new profile for user:', user.id);
+          console.log('Creating new profile for user:', session.user.id);
           // Create new profile
           const { error: insertError } = await supabase
             .from('profiles')
             .insert({
-              user_id: user.id,
+              user_id: session.user.id,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             });
