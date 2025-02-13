@@ -15,7 +15,7 @@ export class TransactionError extends Error {
 
 interface ApproveSellTransactionParams {
   transactionId: string;
-  poolId: string;
+  poolId: string | null;
   pricePerToken: number;
   poolReduction: number;
   userTokens: number;
@@ -31,7 +31,7 @@ interface CreateBuyTransactionParams {
 
 interface ApproveBuyTransactionParams {
   transactionId: string;
-  poolId: string;
+  poolId: string | null;
   pricePerToken: number;
   paymentAmount: number;
 }
@@ -895,7 +895,7 @@ export const transactionService = {
     try {
       console.log('Calling process_sell_transaction with params:', {
         p_transaction_id: transactionId,
-        p_pool_id: poolId,
+        p_pool_id: poolId || '00000000-0000-0000-0000-000000000000',
         p_price_per_token: pricePerToken,
         p_pool_reduction: poolReduction,
         p_user_tokens: userTokens,
@@ -904,7 +904,7 @@ export const transactionService = {
 
       const { data, error } = await adminSupabase.rpc('process_sell_transaction', {
         p_transaction_id: transactionId,
-        p_pool_id: poolId,
+        p_pool_id: poolId || '00000000-0000-0000-0000-000000000000',
         p_price_per_token: pricePerToken,
         p_pool_reduction: poolReduction,
         p_user_tokens: userTokens,
@@ -933,19 +933,29 @@ export const transactionService = {
       // First get the transaction to get the token amount and asset
       const { data: transaction, error: txError } = await adminSupabase
         .from('transactions')
-        .select('*, asset:assets(symbol, type)')
+        .select('*, asset:assets(symbol, type, id)')
         .eq('id', transactionId)
         .single();
 
       if (txError) throw txError;
 
-      // Check if it's a deposit/withdrawal or direct asset
-      const isDirectAsset = ['BTC', 'HONEY', 'USD'].includes(transaction.asset.symbol);
+      // Determine transaction type
+      const isDirectAsset = ['BTC', 'HONEY'].includes(transaction.asset.symbol);
       const isDepositOrWithdraw = ['deposit', 'withdraw'].includes(transaction.type);
       const isDebtAsset = transaction.asset.type === 'debt';
+      const isUsdPurchase = transaction.payment_method === 'usd_balance';
 
-      // Only require pool ID for debt assets
-      if (isDebtAsset && !poolId) {
+      // Check if there are available pools for this asset
+      const { data: poolAssets } = await adminSupabase
+        .from('pool_assets')
+        .select('pool_id, balance')
+        .eq('asset_id', transaction.asset.id)
+        .gt('balance', 0);
+
+      const hasAvailablePools = poolAssets && poolAssets.length > 0;
+
+      // Only require pool ID for debt assets when pools are available
+      if (isDebtAsset && hasAvailablePools && !poolId) {
         throw new Error('Pool ID is required for debt asset transactions');
       }
 
@@ -955,6 +965,8 @@ export const transactionService = {
         isDirectAsset,
         isDepositOrWithdraw,
         isDebtAsset,
+        isUsdPurchase,
+        hasAvailablePools,
         poolId,
         pricePerToken,
         paymentAmount,
@@ -963,18 +975,48 @@ export const transactionService = {
         assetType: transaction.asset.type
       });
 
+      // Handle different transaction types
+      if (isDepositOrWithdraw) {
+        const { data, error } = await adminSupabase.rpc('process_deposit_withdrawal', {
+          p_transaction_id: transactionId,
+          p_price_per_token: pricePerToken,
+          p_amount: transaction.amount
+        });
+        if (error) throw error;
+        return data;
+      }
+
+      // For direct assets (BTC/HONEY), use direct transaction processing
+      if (isDirectAsset) {
+        const { data, error } = await adminSupabase.rpc('process_direct_asset_transaction', {
+          p_transaction_id: transactionId,
+          p_price_per_token: pricePerToken,
+          p_amount: transaction.amount
+        });
+        if (error) throw error;
+        return data;
+      }
+
+      // For debt assets without available pools, use debt asset transaction processing
+      if (isDebtAsset && !hasAvailablePools) {
+        const { data, error } = await adminSupabase.rpc('process_debt_asset_transaction', {
+          p_transaction_id: transactionId,
+          p_price_per_token: pricePerToken,
+          p_amount: transaction.amount
+        });
+        if (error) throw error;
+        return data;
+      }
+
+      // For debt assets with available pools, use pool-based transaction processing
       const { data, error } = await adminSupabase.rpc('process_buy_transaction', {
         p_transaction_id: transactionId,
         p_pool_id: poolId,
         p_price_per_token: pricePerToken,
-        p_amount: transaction.amount
+        p_payment_amount: paymentAmount
       });
 
-      if (error) {
-        console.error('Detailed error from process_buy_transaction:', error);
-        throw new Error(`Failed to approve buy transaction: ${error.message}`);
-      }
-
+      if (error) throw error;
       return data;
     } catch (err) {
       console.error('Error in approveBuyTransaction:', err);

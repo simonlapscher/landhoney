@@ -9,6 +9,7 @@ import { supabase } from '../../lib/supabase';
 import { StakingInfo, BitcoinStakingInfo, DatabasePool, DatabaseAsset, DatabaseBalance } from '../../lib/types/portfolio';
 import { transactionService } from '../../lib/services/transactionService';
 import { ExtendedAsset } from '../../lib/types/asset';
+import { PoolPosition } from '../../components/app/PoolPosition';
 
 interface PoolStats {
   mainAssetBalance: number;
@@ -28,6 +29,15 @@ interface SupabaseUserBalance {
 }
 
 interface SupabaseStakedBalance {
+  asset_id: string;
+  balance: number;
+  assets: {
+    symbol: string;
+    price_per_token: number;
+  };
+}
+
+interface StakedBalance {
   asset_id: string;
   balance: number;
   assets: {
@@ -61,6 +71,11 @@ export const LiquidReserve: React.FC = () => {
     bitcoinPrice: 0,
     honeyPrice: 0
   });
+  const [userPoolPositions, setUserPoolPositions] = useState<Record<string, {
+    stakedAmount: number;
+    ownership: number;
+    currentValue: number;
+  }>>({});
 
   const handleStakingSuccess = () => {
     setRefreshTrigger(prev => prev + 1);
@@ -387,6 +402,68 @@ export const LiquidReserve: React.FC = () => {
     );
   };
 
+  useEffect(() => {
+    const fetchUserPoolPositions = async () => {
+      if (!user?.id || !pools.length) return;
+
+      try {
+        // Get user's staked positions (BTCX and HONEYX balances)
+        const { data: rawBalances } = await supabase
+          .from('user_balances')
+          .select(`
+            asset_id,
+            balance,
+            assets!inner (
+              symbol,
+              price_per_token
+            )
+          `)
+          .in('assets.symbol', ['BTCX', 'HONEYX'])
+          .eq('user_id', user.id);
+
+        if (!rawBalances) return;
+
+        const positions: Record<string, {
+          stakedAmount: number;
+          ownership: number;
+          currentValue: number;
+        }> = {};
+
+        // Process each staked balance
+        const stakedBalances = (rawBalances as unknown as StakedBalance[])
+          .filter((balance): balance is StakedBalance => 
+            balance?.assets?.symbol !== undefined && 
+            balance?.assets?.price_per_token !== undefined
+          );
+
+        for (const balance of stakedBalances) {
+          const isHoney = balance.assets.symbol === 'HONEYX';
+          const poolType = isHoney ? 'honey' : 'bitcoin';
+          const pool = pools.find(p => p.type === poolType);
+
+          if (pool) {
+            const totalPoolValue = pool.total_value_locked;
+            const userStakedValue = balance.balance * balance.assets.price_per_token;
+            const ownership = totalPoolValue > 0 ? userStakedValue / totalPoolValue : 0;
+            const currentValue = totalPoolValue * ownership;
+
+            positions[pool.id] = {
+              stakedAmount: balance.balance,
+              ownership,
+              currentValue
+            };
+          }
+        }
+
+        setUserPoolPositions(positions);
+      } catch (err) {
+        console.error('Error fetching user pool positions:', err);
+      }
+    };
+
+    fetchUserPoolPositions();
+  }, [user?.id, pools, refreshTrigger]);
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
@@ -398,6 +475,7 @@ export const LiquidReserve: React.FC = () => {
           const { mainAssetBalance, debtAssets, totalDebtValue, totalValueLocked } = calculatePoolBalances(pool);
           const hasDebtAssets = debtAssets.length > 0;
           const { mainAssetRatio, debtAssetsRatio } = calculatePoolRatios(pool, mainAssetBalance, debtAssets);
+          const userPosition = userPoolPositions[pool.id];
 
           return (
             <div key={pool.id} className="bg-[#1A1A1A] rounded-xl border border-light/10 p-6">
@@ -500,6 +578,17 @@ export const LiquidReserve: React.FC = () => {
                     ))}
                   </div>
                 </div>
+              )}
+
+              {/* User Position Box - Only show if user has a position */}
+              {userPosition && (
+                <PoolPosition
+                  pool={pool}
+                  userStakedAmount={userPosition.stakedAmount}
+                  poolOwnership={userPosition.ownership}
+                  currentValue={userPosition.currentValue}
+                  pricePerToken={pool.main_asset.price_per_token}
+                />
               )}
             </div>
           );

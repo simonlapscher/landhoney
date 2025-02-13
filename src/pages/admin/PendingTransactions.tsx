@@ -20,6 +20,7 @@ interface Transaction {
   asset_symbol: string;
   user_email: string;
   payment_method: 'usd_balance' | 'bank_account' | 'usdc';
+  asset_type: 'debt' | 'commodity' | 'cash';
 }
 
 interface PoolImpact {
@@ -69,7 +70,14 @@ export const PendingTransactions: React.FC = () => {
       console.log('Fetching pending transactions...');
       const { data, error } = await adminSupabase
         .from('admin_transactions')
-        .select('*')
+        .select(`
+          *,
+          asset:assets (
+            type,
+            symbol,
+            name
+          )
+        `)
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
@@ -78,15 +86,21 @@ export const PendingTransactions: React.FC = () => {
         throw error;
       }
 
-      console.log('Fetched transactions with payment methods:', 
-        data?.map(t => ({
-          id: t.id,
-          type: t.type,
-          payment_method: t.payment_method,
-          status: t.status
-        }))
-      );
-      setTransactions(data || []);
+      // Log raw data
+      console.log('Raw transaction data:', data);
+
+      // Transform the data to include asset_type at the top level
+      const transformedData = data?.map(t => ({
+        ...t,
+        asset_type: t.asset?.type || 'unknown',
+        asset_symbol: t.asset?.symbol || t.asset_symbol,
+        asset_name: t.asset?.name || t.asset_name
+      })) || [];
+
+      // Log transformed data
+      console.log('Transformed transactions:', transformedData);
+      
+      setTransactions(transformedData);
       setError(null);
     } catch (err) {
       console.error('Error details:', { message: 'Unknown error', error: err });
@@ -173,6 +187,16 @@ export const PendingTransactions: React.FC = () => {
   const handleAction = async (action: 'approve' | 'reject', transaction: Transaction) => {
     try {
       if (action === 'approve') {
+        // Add debug logging
+        console.log('Transaction details:', {
+          id: transaction.id,
+          asset_symbol: transaction.asset_symbol,
+          asset_type: transaction.asset_type,
+          type: transaction.type,
+          isDirectAsset: ['BTC', 'HONEY'].includes(transaction.asset_symbol),
+          isDebtAsset: transaction.asset_type === 'debt'
+        });
+
         // Handle deposits and withdrawals separately
         if (transaction.type === 'deposit' || transaction.type === 'withdraw') {
           await transactionService.approveDepositWithdrawal({
@@ -187,82 +211,85 @@ export const PendingTransactions: React.FC = () => {
         }
 
         const isDirectAsset = ['BTC', 'HONEY'].includes(transaction.asset_symbol);
-
-        // Only check for pool selection on debt assets
-        if (!isDirectAsset && !selectedPool?.id) {
-          throw new Error('Please select a pool for debt asset transactions');
-        }
+        const isDebtAsset = transaction.asset_type === 'debt';
+        const availablePools = findAvailablePools(transaction);
+        const hasAvailablePools = availablePools.length > 0;
 
         // For direct assets and deposits/withdrawals, use transaction price
         // If adminPrice is not set, use transaction price as fallback
-        const basePrice = transaction.price_per_token;
+        const finalPrice = adminPrice || transaction.price_per_token;
+
+        // Handle direct assets (BTC/HONEY)
+        if (isDirectAsset) {
+          if (transaction.type === 'buy') {
+            await transactionService.approveBuyTransaction({
+              transactionId: transaction.id,
+              poolId: null,
+              pricePerToken: finalPrice,
+              paymentAmount: transaction.amount
+            });
+          } else {
+            await transactionService.approveSellTransaction({
+              transactionId: transaction.id,
+              poolId: null,
+              pricePerToken: finalPrice,
+              poolReduction: 0,
+              userTokens: transaction.amount
+            });
+          }
+          await fetchTransactions();
+          toast.success('Transaction approved successfully');
+          setSelectedTransaction(null);
+          return;
+        }
+
+        // For debt assets, check if we need pool selection
+        if (isDebtAsset && hasAvailablePools && !selectedPool?.id) {
+          throw new Error('Please select a pool for debt asset transactions');
+        }
 
         if (transaction.type === 'sell') {
-          if (!selectedPool?.id && !isDirectAsset) {
-            throw new Error('Pool selection required for non-direct assets');
-          }
-
-          // For non-direct assets, we need a pool and its main asset
-          if (!isDirectAsset) {
+          // For debt assets with available pools, we need pool and main asset info
+          if (isDebtAsset && hasAvailablePools) {
             if (!selectedPool) {
-              throw new Error('Pool is required for non-direct assets');
+              throw new Error('Pool is required for debt assets');
             }
             if (!selectedPool.main_asset) {
               throw new Error('Selected pool is missing main asset information');
             }
-            // Validate admin price for non-direct assets
+            // Validate admin price for debt assets
             if (adminPrice === null) {
-              throw new Error('Admin price is required for non-direct assets');
-              return;
-            }
-
-            // At this point, we know main_asset exists and has all required properties
-            const mainAsset = selectedPool.main_asset as Required<NonNullable<Pool['main_asset']>>;
-            if (!mainAsset.price_per_token) {
-              throw new Error('Selected pool main asset is missing price information');
+              throw new Error('Admin price is required for debt assets');
             }
           }
-
-          // At this point, for non-direct assets, we know adminPrice is not null
-          const pricePerToken = isDirectAsset ? basePrice : adminPrice as number;
 
           await transactionService.approveSellTransaction({
             transactionId: transaction.id,
-            poolId: selectedPool?.id ?? '', // Empty string for direct assets
-            pricePerToken,
+            poolId: hasAvailablePools && selectedPool ? selectedPool.id : null,
+            pricePerToken: finalPrice,
             poolReduction: poolImpact?.poolReduction ?? 0,
             userTokens: transaction.amount
           });
-        } else if (transaction.type === 'buy') {
-          // For non-direct assets, we need a pool and its main asset
-          if (!isDirectAsset) {
+        } else {
+          // For debt assets with available pools, we need pool and main asset info
+          if (isDebtAsset && hasAvailablePools) {
             if (!selectedPool) {
-              throw new Error('Pool is required for non-direct assets');
+              throw new Error('Pool is required for debt assets');
             }
             if (!selectedPool.main_asset) {
               throw new Error('Selected pool is missing main asset information');
             }
-            // Validate admin price for non-direct assets
+            // Validate admin price for debt assets
             if (adminPrice === null) {
-              throw new Error('Admin price is required for non-direct assets');
-              return;
-            }
-
-            // At this point, we know main_asset exists and has all required properties
-            const mainAsset = selectedPool.main_asset as Required<NonNullable<Pool['main_asset']>>;
-            if (!mainAsset.price_per_token) {
-              throw new Error('Selected pool main asset is missing price information');
+              throw new Error('Admin price is required for debt assets');
             }
           }
 
-          // At this point, for non-direct assets, we know adminPrice is not null
-          const pricePerToken = isDirectAsset ? basePrice : adminPrice as number;
-
           await transactionService.approveBuyTransaction({
             transactionId: transaction.id,
-            poolId: selectedPool?.id ?? '', // Empty string for direct assets
-            pricePerToken,
-            paymentAmount: transaction.amount * pricePerToken
+            poolId: hasAvailablePools && selectedPool ? selectedPool.id : null,
+            pricePerToken: finalPrice,
+            paymentAmount: transaction.amount * finalPrice
           });
         }
 
@@ -413,18 +440,40 @@ export const PendingTransactions: React.FC = () => {
   const renderPoolSelection = (transaction: Transaction) => {
     if (!transaction) return null;
 
+    // Add debug logging
+    console.log('renderPoolSelection - Transaction:', {
+      id: transaction.id,
+      asset_symbol: transaction.asset_symbol,
+      asset_type: transaction.asset_type,
+      type: transaction.type
+    });
+
     // For deposits and withdrawals, only show approval button, no pool or price needed
     if (transaction.type === 'deposit' || transaction.type === 'withdraw') {
       return null;
     }
 
     const isDirectAsset = ['BTC', 'HONEY'].includes(transaction.asset_symbol);
-    const isDebtAsset = transaction.asset_symbol.startsWith('DEBT');
+    const isDebtAsset = transaction.asset_type === 'debt';
+    const availablePools = findAvailablePools(transaction);
+    const hasAvailablePools = availablePools.length > 0;
 
-    // For BTC/HONEY transactions, only show price input if needed
+    // Add debug logging for asset type checks
+    console.log('Asset type checks:', {
+      isDirectAsset,
+      isDebtAsset,
+      hasAvailablePools,
+      asset_type: transaction.asset_type,
+      asset_symbol: transaction.asset_symbol
+    });
+
+    // For BTC/HONEY transactions, only show price input
     if (isDirectAsset) {
       return (
         <div className="space-y-4">
+          <div className="text-sm text-yellow-500 mb-4">
+            Direct asset transaction. No pool selection needed.
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-2">
               Input Agreed Price per Token
@@ -443,19 +492,12 @@ export const PendingTransactions: React.FC = () => {
       );
     }
 
-    // Rest of the existing pool selection logic for debt assets
-    const availablePools = transaction.type === 'buy' 
-      ? findAvailablePools(transaction)
-      : pools.filter(pool => transaction.asset_symbol.startsWith('DEBT'));
-
-    // If no pools available for buy, or no pools can accept this DEBT asset for sell
-    if (availablePools.length === 0) {
+    // For debt assets without available pools, show direct listing UI
+    if (isDebtAsset && !hasAvailablePools) {
       return (
         <div className="space-y-4">
           <div className="text-sm text-yellow-500 mb-4">
-            {transaction.type === 'buy' 
-              ? "No pools have this asset. Transaction will be processed as a direct offering."
-              : "No pools available to accept this asset."}
+            No pools have this asset. Transaction will be processed as a direct offering.
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-2">
@@ -464,7 +506,7 @@ export const PendingTransactions: React.FC = () => {
             <input
               type="number"
               className="w-full bg-[#1A1A1A] text-light rounded-lg p-2 border border-gray-700"
-              value={adminPrice || ''}
+              value={adminPrice || transaction.price_per_token || ''}
               onChange={(e) => setAdminPrice(parseFloat(e.target.value))}
               placeholder="Enter price per token"
               min="0"
@@ -475,6 +517,7 @@ export const PendingTransactions: React.FC = () => {
       );
     }
 
+    // For debt assets with available pools, show pool selection
     return (
       <div className="space-y-4">
         <div>
