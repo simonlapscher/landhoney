@@ -34,7 +34,7 @@ export interface PoolBalance {
   balance: number;
   createdAt: string;
   updatedAt: string;
-  asset: {
+  asset?: {
     id: string;
     symbol: string;
     name: string;
