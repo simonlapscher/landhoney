@@ -97,27 +97,19 @@ file_size_limit = "50MiB"
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "https://landhoney.vercel.app"
+site_url = "http://localhost:5173"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = [
   "https://landhoney.vercel.app",
-  "https://landhoney.vercel.app/onboarding/verify",
+  "https://landhoney.vercel.app/",
+  "https://landhoney.vercel.app/#",
   "https://landhoney.vercel.app/auth/callback",
   "http://localhost:5173",
-  "http://localhost:5173/onboarding/verify",
+  "http://localhost:5173/",
+  "http://localhost:5173/#",
   "http://localhost:5173/auth/callback",
-  "http://localhost:5174",
-  "http://localhost:5174/onboarding/verify",
-  "http://localhost:5174/auth/callback",
-  "http://localhost:5175",
-  "http://localhost:5175/onboarding/verify",
-  "http://localhost:5175/auth/callback",
-  "http://localhost:5176",
-  "http://localhost:5176/onboarding/verify",
-  "http://localhost:5176/auth/callback",
-  "http://localhost:5177",
-  "http://localhost:5177/onboarding/verify",
-  "http://localhost:5177/auth/callback"
+  "http://localhost:5173/onboarding/verify",
+  "http://localhost:5173/onboarding/country"
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600

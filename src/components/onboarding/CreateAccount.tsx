@@ -58,7 +58,7 @@ export const CreateAccount: React.FC = () => {
         ? window.location.origin  // Use localhost URL in development
         : 'https://landhoney.vercel.app';
         
-      // Construct the redirect URL with the correct path
+      // Always use the auth callback route
       const redirectTo = `${currentOrigin}/auth/callback`;
       
       console.log('Signup attempt:', {

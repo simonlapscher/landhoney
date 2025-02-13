@@ -9,60 +9,82 @@ export const AuthCallback: React.FC = () => {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // Get the URL parameters
-        const params = new URLSearchParams(window.location.search);
-        const token = params.get('token');
-        const type = params.get('type');
+        console.log('Starting auth callback with URL:', window.location.href);
         
-        console.log('Auth callback params:', { hasToken: !!token, type });
+        // Check for hash parameters first (this is what we get from production)
+        const hashParams = new URLSearchParams(window.location.hash.replace('#', ''));
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const type = hashParams.get('type');
 
-        if (!token) {
-          throw new Error('No token found in URL');
-        }
-
-        // Handle the token verification
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-          token_hash: token,
-          type: type as any || 'signup'
+        console.log('Auth params:', {
+          hasAccessToken: !!accessToken,
+          hasRefreshToken: !!refreshToken,
+          type
         });
 
-        if (verifyError) throw verifyError;
+        if (accessToken) {
+          // Set the session with the tokens from the hash
+          const { data: { session }, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken || ''
+          });
 
-        // Get the session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
-        if (!session?.user) throw new Error('No user found after verification');
+          if (sessionError) {
+            console.error('Session error:', sessionError);
+            throw sessionError;
+          }
 
-        // Create profile if needed
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .single();
+          if (!session?.user) {
+            console.error('No user found in session');
+            throw new Error('No user found in session');
+          }
 
-        if (profileError && profileError.code !== 'PGRST116') {
-          throw profileError;
-        }
+          console.log('Session established for user:', session.user.id);
 
-        if (!profile) {
-          const { error: createError } = await supabase
+          // Check if profile exists
+          const { data: profile, error: profileError } = await supabase
             .from('profiles')
-            .insert({
-              user_id: session.user.id,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            });
+            .select('*')
+            .eq('user_id', session.user.id)
+            .single();
 
-          if (createError) throw createError;
+          if (profileError && profileError.code !== 'PGRST116') {
+            console.error('Profile fetch error:', profileError);
+            throw profileError;
+          }
+
+          if (!profile) {
+            console.log('Creating new profile for user:', session.user.id);
+            const { error: createError } = await supabase
+              .from('profiles')
+              .insert({
+                user_id: session.user.id,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              });
+
+            if (createError) {
+              console.error('Profile creation error:', createError);
+              throw createError;
+            }
+          }
+
+          // Update user metadata
+          const { error: updateError } = await supabase.auth.updateUser({
+            data: { needs_profile_creation: false }
+          });
+
+          if (updateError) {
+            console.error('Error updating user metadata:', updateError);
+          }
+
+          // Redirect to the next step
+          console.log('Redirecting to country selection');
+          navigate('/onboarding/country');
+        } else {
+          throw new Error('No authentication tokens found in URL');
         }
-
-        // Update user metadata
-        await supabase.auth.updateUser({
-          data: { needs_profile_creation: false }
-        });
-
-        // Redirect to the next step
-        navigate('/onboarding/country');
       } catch (err) {
         console.error('Auth callback error:', err);
         setError(err instanceof Error ? err.message : 'An error occurred during verification');
@@ -79,12 +101,17 @@ export const AuthCallback: React.FC = () => {
           <div className="text-red-500 mb-4">⚠️</div>
           <h2 className="text-xl font-semibold text-light mb-2">Verification Error</h2>
           <p className="text-light/60">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-4 px-4 py-2 bg-primary text-dark rounded-lg hover:bg-primary/90"
-          >
-            Try Again
-          </button>
+          <div className="mt-4 space-y-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-primary text-dark rounded-lg hover:bg-primary/90"
+            >
+              Try Again
+            </button>
+            <p className="text-sm text-light/60">
+              If the error persists, please request a new verification email.
+            </p>
+          </div>
         </div>
       </div>
     );
