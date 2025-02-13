@@ -11,20 +11,34 @@ export const EmailVerification: React.FC = () => {
   useEffect(() => {
     const handleEmailVerification = async () => {
       try {
-        // Get the token from the URL
-        const params = new URLSearchParams(window.location.hash.substring(1));
-        const token = params.get('access_token');
+        // Try to get token from both hash and query parameters
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const queryParams = new URLSearchParams(window.location.search);
+        
+        let token = hashParams.get('access_token') || queryParams.get('token');
         
         if (!token) {
           console.error('No token found in URL');
           throw new Error('Verification link is invalid or has expired');
         }
 
-        // Set the session using the token
-        const { data: { session }, error: sessionError } = await supabase.auth.setSession({
-          access_token: token,
-          refresh_token: token
-        });
+        console.log('Token found:', token ? 'yes' : 'no');
+
+        // If token is from query params, verify it first
+        if (queryParams.get('token')) {
+          const { error: verifyError } = await supabase.auth.verifyOtp({
+            token_hash: token,
+            type: 'signup'
+          });
+
+          if (verifyError) {
+            console.error('Verification error:', verifyError);
+            throw verifyError;
+          }
+        }
+
+        // Get the current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
         if (sessionError) {
           console.error('Session error:', sessionError);
@@ -32,7 +46,7 @@ export const EmailVerification: React.FC = () => {
         }
 
         if (!session?.user) {
-          throw new Error('No user found');
+          throw new Error('No user found after verification');
         }
 
         console.log('Verifying user:', session.user.id);
