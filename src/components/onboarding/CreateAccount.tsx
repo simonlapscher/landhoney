@@ -52,7 +52,9 @@ export const CreateAccount: React.FC = () => {
     }
 
     try {
-      const redirectTo = new URL('/onboarding/verify', window.location.origin).toString();
+      // Get the current origin, which includes the correct port
+      const currentOrigin = window.location.origin;
+      const redirectTo = `${currentOrigin}/onboarding/verify`;
       console.log('Redirect URL:', redirectTo);
       
       const { data, error: signUpError } = await supabase.auth.signUp({
