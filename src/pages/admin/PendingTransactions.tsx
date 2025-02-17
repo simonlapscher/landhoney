@@ -243,59 +243,39 @@ export const PendingTransactions: React.FC = () => {
           return;
         }
 
-        // For debt assets, check if we need pool selection
-        if (isDebtAsset && hasAvailablePools && !selectedPool?.id) {
-          throw new Error('Please select a pool for debt asset transactions');
-        }
-
-        if (transaction.type === 'sell') {
-          // For debt assets with available pools, we need pool and main asset info
-          if (isDebtAsset && hasAvailablePools) {
-            if (!selectedPool) {
-              throw new Error('Pool is required for debt assets');
-            }
-            if (!selectedPool.main_asset) {
-              throw new Error('Selected pool is missing main asset information');
-            }
-            // Validate admin price for debt assets
-            if (adminPrice === null) {
-              throw new Error('Admin price is required for debt assets');
-            }
+        // For debt assets
+        if (isDebtAsset) {
+          // For sell transactions, always require pool selection
+          if (transaction.type === 'sell' && !selectedPool?.id) {
+            throw new Error('Please select a pool for the debt asset');
+          }
+          
+          // For buy transactions, only require pool selection if pools are available
+          if (transaction.type === 'buy' && hasAvailablePools && !selectedPool?.id) {
+            throw new Error('Please select a pool to buy the debt asset from');
           }
 
-          await transactionService.approveSellTransaction({
-            transactionId: transaction.id,
-            poolId: hasAvailablePools && selectedPool ? selectedPool.id : null,
-            pricePerToken: finalPrice,
-            poolReduction: poolImpact?.poolReduction ?? 0,
-            userTokens: transaction.amount
-          });
-        } else {
-          // For debt assets with available pools, we need pool and main asset info
-          if (isDebtAsset && hasAvailablePools) {
-            if (!selectedPool) {
-              throw new Error('Pool is required for debt assets');
-            }
-            if (!selectedPool.main_asset) {
-              throw new Error('Selected pool is missing main asset information');
-            }
-            // Validate admin price for debt assets
-            if (adminPrice === null) {
-              throw new Error('Admin price is required for debt assets');
-            }
+          if (transaction.type === 'buy') {
+            await transactionService.approveBuyTransaction({
+              transactionId: transaction.id,
+              poolId: hasAvailablePools && selectedPool ? selectedPool.id : null,
+              pricePerToken: finalPrice,
+              paymentAmount: transaction.amount
+            });
+          } else {
+            await transactionService.approveSellTransaction({
+              transactionId: transaction.id,
+              poolId: selectedPool ? selectedPool.id : null,
+              pricePerToken: finalPrice,
+              poolReduction: poolImpact?.poolReduction || 0,
+              userTokens: transaction.amount
+            });
           }
-
-          await transactionService.approveBuyTransaction({
-            transactionId: transaction.id,
-            poolId: hasAvailablePools && selectedPool ? selectedPool.id : null,
-            pricePerToken: finalPrice,
-            paymentAmount: transaction.amount * finalPrice
-          });
+          await fetchTransactions();
+          toast.success('Transaction approved successfully');
+          setSelectedTransaction(null);
+          return;
         }
-
-        await fetchTransactions();
-        toast.success('Transaction approved successfully');
-        setSelectedTransaction(null);
       } else {
         setIsSubmitting(true);
         await transactionService.rejectTransaction(transaction.id);
@@ -353,14 +333,23 @@ export const PendingTransactions: React.FC = () => {
     setPoolImpact(impact);
   };
 
-  const findAvailablePools = (transaction: Transaction) => {
-    return pools.filter(pool => {
-      const poolAssets = pool.pool_assets || [];
-      const hasAsset = poolAssets.some(pa => 
-        pa.asset.id === transaction.asset_id && pa.balance > 0
+  const findAvailablePools = (transaction: Transaction): Pool[] => {
+    // For sell transactions of debt assets, return all pools
+    if (transaction.type === 'sell' && transaction.asset_type === 'debt') {
+      return pools;
+    }
+    
+    // For buy transactions of debt assets, return pools that have the asset
+    if (transaction.type === 'buy' && transaction.asset_type === 'debt') {
+      return pools.filter(pool => 
+        pool.pool_assets?.some(pa => 
+          pa.asset.symbol === transaction.asset_symbol && pa.balance > 0
+        )
       );
-      return hasAsset;
-    });
+    }
+    
+    // For direct assets (BTC/HONEY), no pools needed
+    return [];
   };
 
   const renderTransactionRow = (transaction: Transaction) => (

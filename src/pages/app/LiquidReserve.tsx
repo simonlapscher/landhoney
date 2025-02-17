@@ -46,6 +46,26 @@ interface StakedBalance {
   };
 }
 
+interface StakingPosition {
+  id: string;
+  pool_id: string;
+  staked_amount: number;
+  ownership_percentage: number;
+  stake_timestamp: string;
+  pool: {
+    id: string;
+    type: string;
+    total_value_locked: number;
+    apr: number;
+    main_asset: {
+      id: string;
+      symbol: string;
+      name: string;
+      price_per_token: number;
+    };
+  };
+}
+
 export const LiquidReserve: React.FC = () => {
   const { user } = useAuth();
   const [pools, setPools] = useState<DatabasePool[]>([]);
@@ -71,10 +91,11 @@ export const LiquidReserve: React.FC = () => {
     bitcoinPrice: 0,
     honeyPrice: 0
   });
-  const [userPoolPositions, setUserPoolPositions] = useState<Record<string, {
+  const [userPositions, setUserPositions] = useState<Record<string, {
     stakedAmount: number;
     ownership: number;
     currentValue: number;
+    pricePerToken: number;
   }>>({});
 
   const handleStakingSuccess = () => {
@@ -266,6 +287,21 @@ export const LiquidReserve: React.FC = () => {
     // Total Value Locked is sum of main asset value and debt assets value
     const totalValueLocked = mainAssetValue + totalDebtValue;
 
+    console.log('Pool balance calculation:', {
+      poolId: pool.id,
+      poolType: pool.type,
+      mainAssetBalance,
+      mainAssetValue,
+      debtAssetsValue: totalDebtValue,
+      totalValueLocked,
+      mainAssetPrice: pool.main_asset.price_per_token,
+      debtAssets: debtAssets.map(da => ({
+        symbol: da.asset.symbol,
+        balance: da.balance,
+        value: da.balance * da.asset.price_per_token
+      }))
+    });
+
     return {
       mainAssetBalance,
       debtAssets,
@@ -402,67 +438,78 @@ export const LiquidReserve: React.FC = () => {
     );
   };
 
-  useEffect(() => {
-    const fetchUserPoolPositions = async () => {
-      if (!user?.id || !pools.length) return;
-
-      try {
-        // Get user's staked positions (BTCX and HONEYX balances)
-        const { data: rawBalances } = await supabase
-          .from('user_balances')
-          .select(`
-            asset_id,
-            balance,
-            assets!inner (
+  const fetchUserPoolPositions = async () => {
+    if (!user) return;
+    
+    try {
+      const { data: rawPositions, error } = await supabase
+        .from('staking_positions')
+        .select(`
+          id,
+          pool_id,
+          staked_amount,
+          ownership_percentage,
+          stake_timestamp,
+          pool:pools (
+            id,
+            type,
+            total_value_locked,
+            apr,
+            main_asset:assets (
+              id,
               symbol,
+              name,
               price_per_token
             )
-          `)
-          .in('assets.symbol', ['BTCX', 'HONEYX'])
-          .eq('user_id', user.id);
+          )
+        `)
+        .eq('user_id', user.id)
+        .eq('status', 'active');
 
-        if (!rawBalances) return;
+      if (error) throw error;
 
-        const positions: Record<string, {
-          stakedAmount: number;
-          ownership: number;
-          currentValue: number;
-        }> = {};
+      // Transform positions into the expected record structure
+      const positionsRecord: Record<string, {
+        stakedAmount: number;
+        ownership: number;
+        currentValue: number;
+        pricePerToken: number;
+      }> = {};
 
-        // Process each staked balance
-        const stakedBalances = (rawBalances as unknown as StakedBalance[])
-          .filter((balance): balance is StakedBalance => 
-            balance?.assets?.symbol !== undefined && 
-            balance?.assets?.price_per_token !== undefined
-          );
-
-        for (const balance of stakedBalances) {
-          const isHoney = balance.assets.symbol === 'HONEYX';
-          const poolType = isHoney ? 'honey' : 'bitcoin';
-          const pool = pools.find(p => p.type === poolType);
-
-          if (pool) {
-            const totalPoolValue = pool.total_value_locked;
-            const userStakedValue = balance.balance * balance.assets.price_per_token;
-            const ownership = totalPoolValue > 0 ? userStakedValue / totalPoolValue : 0;
-            const currentValue = totalPoolValue * ownership;
-
-            positions[pool.id] = {
-              stakedAmount: balance.balance,
-              ownership,
-              currentValue
-            };
-          }
+      // Type assertion for the raw response
+      const positions = (rawPositions as any[]).map(pos => ({
+        id: pos.id,
+        pool_id: pos.pool_id,
+        staked_amount: pos.staked_amount,
+        ownership_percentage: pos.ownership_percentage,
+        stake_timestamp: pos.stake_timestamp,
+        pool: {
+          id: pos.pool.id,
+          type: pos.pool.type,
+          total_value_locked: pos.pool.total_value_locked,
+          apr: pos.pool.apr,
+          main_asset: pos.pool.main_asset
         }
+      })) as StakingPosition[];
 
-        setUserPoolPositions(positions);
-      } catch (err) {
-        console.error('Error fetching user pool positions:', err);
-      }
-    };
+      positions.forEach(position => {
+        positionsRecord[position.pool_id] = {
+          stakedAmount: position.staked_amount,
+          ownership: position.ownership_percentage,
+          currentValue: position.ownership_percentage * position.pool.total_value_locked,
+          pricePerToken: position.pool.main_asset.price_per_token
+        };
+      });
 
+      setUserPositions(positionsRecord);
+    } catch (err) {
+      console.error('Error fetching pool positions:', err);
+    }
+  };
+
+  useEffect(() => {
     fetchUserPoolPositions();
-  }, [user?.id, pools, refreshTrigger]);
+  }, [user?.id]);
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
@@ -475,7 +522,20 @@ export const LiquidReserve: React.FC = () => {
           const { mainAssetBalance, debtAssets, totalDebtValue, totalValueLocked } = calculatePoolBalances(pool);
           const hasDebtAssets = debtAssets.length > 0;
           const { mainAssetRatio, debtAssetsRatio } = calculatePoolRatios(pool, mainAssetBalance, debtAssets);
-          const userPosition = userPoolPositions[pool.id];
+          const userPosition = userPositions[pool.id];
+
+          console.log('LiquidReserve - Rendering pool position:', {
+            poolId: pool.id,
+            poolType: pool.type,
+            hasPosition: !!userPosition,
+            position: userPosition ? {
+              stakedAmount: userPosition.stakedAmount,
+              ownership: userPosition.ownership,
+              ownershipPercentage: userPosition.ownership * 100,
+              currentValue: userPosition.currentValue
+            } : null,
+            mainAssetPrice: pool.main_asset.price_per_token
+          });
 
           return (
             <div key={pool.id} className="bg-[#1A1A1A] rounded-xl border border-light/10 p-6">
@@ -587,7 +647,7 @@ export const LiquidReserve: React.FC = () => {
                   userStakedAmount={userPosition.stakedAmount}
                   poolOwnership={userPosition.ownership}
                   currentValue={userPosition.currentValue}
-                  pricePerToken={pool.main_asset.price_per_token}
+                  pricePerToken={userPosition.pricePerToken}
                 />
               )}
             </div>
