@@ -224,7 +224,29 @@ export const PendingTransactions: React.FC = () => {
         });
 
         // Process the approval based on transaction type
-        if (transaction.type === 'buy') {
+        if (transaction.type === 'deposit' || transaction.type === 'withdraw') {
+          console.log('Processing deposit/withdrawal transaction:', {
+            id: transaction.id,
+            type: transaction.type,
+            amount: transaction.amount,
+            pricePerToken: finalPrice
+          });
+
+          const { data, error } = await adminSupabase.rpc('process_deposit_withdrawal', {
+            p_transaction_id: transaction.id,
+            p_amount: transaction.amount,
+            p_price_per_token: finalPrice
+          });
+
+          if (error) {
+            console.error('Error processing deposit/withdrawal:', error);
+            throw new Error(`Failed to process ${transaction.type}: ${error.message}`);
+          }
+
+          // Show success toast and refresh transactions
+          toast.success(`${transaction.type === 'deposit' ? 'Deposit' : 'Withdrawal'} processed successfully`);
+          await fetchTransactions();
+        } else if (transaction.type === 'buy') {
           console.log('Processing buy transaction approval:', {
             id: transaction.id,
             poolId: selectedPool?.id || null,

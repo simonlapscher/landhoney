@@ -80,8 +80,8 @@ export const InvestmentBox: React.FC<InvestmentBoxProps> = ({
           </div>
           <div className="flex flex-col items-center">
             <div className="text-center">
-              <p className="text-2xl text-light font-medium">{asset.term_months} Mo.</p>
-              <p className="text-sm text-light/60 mt-1">Term</p>
+              <p className="text-sm text-light/60">Duration</p>
+              <p className="text-2xl text-light font-medium">{asset.duration_months} Mo.</p>
             </div>
           </div>
         </div>

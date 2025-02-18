@@ -20,7 +20,7 @@ export interface DebtAsset extends BaseAsset {
   apr: number;
   ltv: number;
   term: string;
-  term_months: number;
+  duration_months: number;
   loan_amount: number;
   appraised_value: number;
   funded_amount: number;

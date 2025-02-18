@@ -6,6 +6,7 @@ import { IoMdInformationCircleOutline } from 'react-icons/io';
 import { FiEdit2 } from 'react-icons/fi';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { supabase } from '../../lib/supabase';
+import { StakingInfo } from '../common/StakingInfo';
 
 interface BitcoinStakingModalProps {
   isOpen: boolean;
@@ -294,7 +295,10 @@ export const BitcoinStakingModal: React.FC<BitcoinStakingModalProps> = ({
                 </div>
 
                 <p className="text-sm text-gray-400 mb-4">
-                  Staking involves risks. <a href="#" className="text-[#F7931A] hover:text-[#E68A19]">Learn more</a>
+                  Staking involves risks. By confirming your staking, you agree to our{' '}
+                  <a href="/staking-terms" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:text-[#E68A19]">
+                    Staking Terms & Conditions
+                  </a>
                 </p>
 
                 <div className="flex items-center gap-4">
@@ -396,12 +400,14 @@ export const BitcoinStakingModal: React.FC<BitcoinStakingModalProps> = ({
               </div>
 
               {error && (
-                <div className="mb-4 px-6 text-sm text-red-500">
+                <div className="mb-4 text-sm text-red-500">
                   {error}
                 </div>
               )}
 
-              <div className="p-6 pt-0">
+              <div className="px-6">
+                <StakingInfo assetName="Bitcoin" />
+                
                 <button
                   onClick={() => setShowConfirmation(true)}
                   disabled={!amount || Number(amount) <= 0 || Number(amount) > bitcoinBalance}

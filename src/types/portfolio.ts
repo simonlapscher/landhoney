@@ -21,7 +21,7 @@ export interface PortfolioAsset extends Asset {
   location?: string;
   ltv?: number;
   term?: string;
-  term_months?: number;
+  duration_months?: number;
   loan_amount?: number;
   appraised_value?: number;
   funded_amount?: number;
@@ -35,7 +35,7 @@ export interface DebtAsset extends PortfolioAsset {
   location: string;
   ltv: number;
   term: string;
-  term_months: number;
+  duration_months: number;
   loan_amount: number;
   appraised_value: number;
   funded_amount: number;

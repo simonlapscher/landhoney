@@ -17,7 +17,8 @@ const menuItems = [
   { path: 'loans', label: 'Loan Distribution', icon: BanknotesIcon },
   { path: 'payouts', label: 'Payout History', icon: DocumentCheckIcon },
   { path: 'mint', label: 'Token Minting', icon: UserPlusIcon },
-  { path: 'add-asset', label: 'Add Asset', icon: BanknotesIcon }
+  { path: 'add-asset', label: 'Add Asset', icon: BanknotesIcon },
+  { path: 'referrals', label: 'Referrals', icon: BanknotesIcon }
 ];
 
 export const AdminLayout: React.FC = () => {

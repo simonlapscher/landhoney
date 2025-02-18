@@ -15,10 +15,11 @@ export interface NewDebtAsset {
   state: string;
   zip_code: string;
   loan_amount: number;
-  term_months: number;
+  duration_months: number;
   apr: number;
   appraised_value: number;
   loan_maturity_date: Date;
+  repayment_terms: string;
   images: { url: string; description?: string }[];
   documents: { url: string; name: string; type: string }[];
 }

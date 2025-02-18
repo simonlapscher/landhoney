@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CommodityAsset } from '../../lib/types/asset';
 import { Modal } from '../common/Modal';
 import { InvestWidget } from './InvestWidget';
+import { useAuth } from '../../lib/context/AuthContext';
+import { transactionService } from '../../lib/services/transactionService';
 
 interface CommodityInvestmentBoxProps {
   asset: CommodityAsset;
@@ -17,6 +19,39 @@ export const CommodityInvestmentBox: React.FC<CommodityInvestmentBoxProps> = ({
   onSell,
 }) => {
   const [showInvestModal, setShowInvestModal] = useState(false);
+  const { user } = useAuth();
+  const [stakingInfo, setStakingInfo] = useState<{ balance: number, xBalance: number } | null>(null);
+
+  useEffect(() => {
+    const fetchStakingInfo = async () => {
+      if (!user?.id || !['BTC', 'HONEY'].includes(asset.symbol)) return;
+
+      try {
+        if (asset.symbol === 'BTC') {
+          const info = await transactionService.getBitcoinStakingInfo(user.id);
+          setStakingInfo({
+            balance: info.bitcoinBalance,
+            xBalance: info.bitcoinXBalance
+          });
+        } else if (asset.symbol === 'HONEY') {
+          const info = await transactionService.getHoneyStakingInfo(user.id);
+          setStakingInfo({
+            balance: info.honeyBalance,
+            xBalance: info.honeyXBalance
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching staking info:', err);
+      }
+    };
+
+    fetchStakingInfo();
+  }, [user?.id, asset.symbol]);
+
+  // Calculate total balance including staked tokens
+  const totalBalance = stakingInfo 
+    ? stakingInfo.balance + stakingInfo.xBalance 
+    : userBalance;
 
   const getAssetConfig = () => {
     if (asset.symbol === 'BTC') {
@@ -43,7 +78,7 @@ export const CommodityInvestmentBox: React.FC<CommodityInvestmentBoxProps> = ({
         <div className="mb-6 flex items-center gap-2">
           <p className="text-light/60 text-sm">Your balance</p>
           <p className="text-light text-sm">
-            ${(userBalance * asset.price_per_token).toLocaleString(undefined, {
+            ${(totalBalance * asset.price_per_token).toLocaleString(undefined, {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2
             })}
@@ -62,11 +97,11 @@ export const CommodityInvestmentBox: React.FC<CommodityInvestmentBoxProps> = ({
 
         {/* Action Buttons */}
         <div className="flex gap-4">
-          <button
+          <button 
             onClick={() => setShowInvestModal(true)}
-            className="flex-1 text-dark font-medium py-3 px-6 rounded-lg hover:opacity-90 transition-colors"
+            className="w-full text-dark font-medium py-3 px-6 rounded-lg hover:opacity-90 transition-colors"
             style={{
-              background: asset.symbol === 'BTC'
+              background: asset.symbol === 'BTC' 
                 ? 'linear-gradient(90deg, #F7931A 0%, #FFAB4A 100%)'
                 : asset.symbol === 'HONEY'
                 ? 'linear-gradient(90deg, #FFD700 0%, #FFA500 100%)'
@@ -77,7 +112,7 @@ export const CommodityInvestmentBox: React.FC<CommodityInvestmentBoxProps> = ({
           </button>
           <button
             onClick={onSell}
-            className="flex-1 bg-[#3A3A3A] text-light/60 font-medium py-3 px-6 rounded-lg hover:bg-[#3A3A3A]/90 transition-colors"
+            className="w-full bg-[#3A3A3A] text-light/60 font-medium py-3 px-6 rounded-lg hover:bg-[#3A3A3A]/90 transition-colors"
           >
             Sell
           </button>
@@ -92,7 +127,7 @@ export const CommodityInvestmentBox: React.FC<CommodityInvestmentBoxProps> = ({
         <InvestWidget
           asset={asset}
           onClose={() => setShowInvestModal(false)}
-          userBalance={userBalance}
+          userBalance={totalBalance}
         />
       </Modal>
     </>

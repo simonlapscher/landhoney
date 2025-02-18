@@ -33,6 +33,10 @@ import { AddAsset } from './pages/admin/AddAsset';
 import { LiquidReserve } from './pages/app/LiquidReserve';
 import { Toaster } from 'react-hot-toast';
 import { AuthCallback } from './components/auth/AuthCallback';
+import { StakingTerms } from './components/legal/StakingTerms';
+import { HoneyTokenAgreement } from './components/legal/HoneyTokenAgreement';
+import { Referrals } from './pages/admin/Referrals';
+import { ReferAndEarn } from './components/profile/ReferAndEarn';
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -67,6 +71,8 @@ const App: React.FC = () => {
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/marketing" element={<MarketingPreferences />} />
+          <Route path="/staking-terms" element={<StakingTerms />} />
+          <Route path="/honey-token-agreement" element={<HoneyTokenAgreement />} />
           
           {/* Admin routes */}
           <Route path="/admin">
@@ -78,6 +84,7 @@ const App: React.FC = () => {
               <Route path="payouts" element={<PayoutHistory />} />
               <Route path="mint" element={<TokenMinting />} />
               <Route path="add-asset" element={<AddAsset />} />
+              <Route path="referrals" element={<Referrals />} />
               <Route index element={<Navigate to="transactions" replace />} />
             </Route>
           </Route>
@@ -103,6 +110,7 @@ const App: React.FC = () => {
             <Route path="portfolio" element={<Portfolio />} />
             <Route path="invest" element={<Invest />} />
             <Route path="invest/:id" element={<AssetDetail />} />
+            <Route path="refer-and-earn" element={<ReferAndEarn />} />
             <Route 
               path="liquid-reserve" 
               element={

@@ -3,11 +3,11 @@ import { Dialog } from '@headlessui/react';
 import { Asset } from '../../lib/types/asset';
 import { Modal } from '../shared/Modal';
 import { formatCurrency } from '../../lib/utils/formatters';
-import { IoMdInformationCircleOutline } from 'react-icons/io';
-import { FiEdit2 } from 'react-icons/fi';
+import { InformationCircleIcon, CheckCircleIcon } from '@heroicons/react/24/solid';
+import { ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../../lib/context/AuthContext';
 import { transactionService } from '../../lib/services/transactionService';
-import { CheckCircleIcon } from '@heroicons/react/24/solid';
+import { FiEdit2 } from 'react-icons/fi';
 
 interface DepositModalProps {
   isOpen: boolean;
@@ -22,8 +22,8 @@ interface TooltipProps {
 
 const Tooltip: React.FC<TooltipProps> = ({ content }) => (
   <div className="group relative inline-block">
-    <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-300 ml-1" />
-    <div className="hidden group-hover:block absolute z-50 w-48 p-2 bg-gray-800 text-xs text-gray-200 rounded shadow-lg -right-1 top-6">
+    <InformationCircleIcon className="w-4 h-4 text-light/60" />
+    <div className="hidden group-hover:block absolute z-50 w-64 p-2 text-sm bg-dark-2 text-light/80 rounded-lg shadow-lg -right-1 top-6">
       {content}
     </div>
   </div>
@@ -36,6 +36,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, ass
   const [step, setStep] = useState<'initial' | 'confirm' | 'success' | 'instructions'>('initial');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   const handlePreviewDeposit = () => {
     if (!amount || parseFloat(amount) <= 0) return;
@@ -54,6 +55,16 @@ export const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, ass
       setError(err instanceof Error ? err.message : 'Failed to initiate deposit');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText('0x1234...5678');
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy address:', err);
     }
   };
 
@@ -207,8 +218,9 @@ export const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, ass
         </div>
       </div>
 
-      <p className="text-white mb-8">
-        Send your payment to complete your deposit. Once verified, it will be available in your account.
+      <p className="text-white/60 mb-8">
+        Send your payment to complete your deposit.<br />
+        Once verified, it will be available in your account.
       </p>
 
       {transferMethod === 'bank' ? (
@@ -247,24 +259,38 @@ export const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, ass
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="space-y-4">
-            <h3 className="font-medium">USDC Transfer Details</h3>
-            <div className="space-y-3 text-light/80">
-              <div className="flex justify-between">
-                <span>Network</span>
-                <span className="font-medium">Ethereum</span>
+          <div className="bg-light/5 p-6 rounded-xl space-y-4">
+            <div>
+              <div className="text-sm text-light/60 mb-1">USDC Address (Ethereum)</div>
+              <div className="flex items-center gap-2">
+                <span className="text-light font-mono">0x1234...5678</span>
+                <button
+                  onClick={handleCopy}
+                  className="text-primary hover:text-primary/80"
+                >
+                  {copySuccess ? (
+                    <CheckCircleIcon className="w-5 h-5" />
+                  ) : (
+                    <ClipboardDocumentIcon className="w-5 h-5" />
+                  )}
+                </button>
               </div>
-              <div className="flex justify-between">
-                <span>Contract</span>
-                <span className="font-medium">0x1234...5678</span>
-              </div>
+            </div>
+            <div>
+              <div className="text-sm text-light/60 mb-1">Amount to Send</div>
+              <div className="text-light">{parseFloat(amount).toFixed(2)} USDC</div>
             </div>
           </div>
 
-          <div className="p-4 bg-[#2A2A2A] rounded-lg">
-            <p className="text-light/80">
-              Only send USDC on the Ethereum network. Transfers on other networks may result in permanent loss.
-            </p>
+          <div className="text-sm text-light/60 space-y-2">
+            <div className="flex items-center gap-2">
+              <Tooltip content="Only send USDC using the Ethereum network" />
+              <p>This address will only receive USDC on the Ethereum network.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Tooltip content="Funds sent on other networks cannot be recovered" />
+              <p>Tokens sent to the wrong network will result in lost funds.</p>
+            </div>
           </div>
         </div>
       )}

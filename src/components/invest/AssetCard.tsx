@@ -101,8 +101,8 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset }) => {
                 <p className="text-sm text-light/60">LTV</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl text-light font-medium">{(asset as DebtAsset).term_months} Mo.</p>
-                <p className="text-sm text-light/60">Term</p>
+                <p className="text-sm text-light/60">Duration</p>
+                <p className="text-2xl text-light font-medium">{(asset as DebtAsset).duration_months} Mo.</p>
               </div>
             </div>
 

@@ -27,12 +27,13 @@ export const AddAsset: React.FC = () => {
     state: '',
     zip_code: '',
     loan_amount: 0,
-    term_months: 12,
+    duration_months: 12,
     apr: 0,
     appraised_value: 0,
     loan_maturity_date: new Date(),
     images: [],
-    documents: []
+    documents: [],
+    repayment_terms: ''
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -184,13 +185,14 @@ export const AddAsset: React.FC = () => {
           state: formData.state,
           zip_code: formData.zip_code,
           loan_amount: formData.loan_amount,
-          term_months: formData.term_months,
+          duration_months: formData.duration_months,
           apr: formData.apr,
           appraised_value: formData.appraised_value,
           loan_maturity_date: formData.loan_maturity_date,
           status: 'FUNDING',
           images: formData.images.map(img => img.url),
-          documents: formData.documents
+          documents: formData.documents,
+          repayment_terms: formData.repayment_terms
         });
 
       if (debtError) {
@@ -213,12 +215,13 @@ export const AddAsset: React.FC = () => {
         state: '',
         zip_code: '',
         loan_amount: 0,
-        term_months: 12,
+        duration_months: 12,
         apr: 0,
         appraised_value: 0,
         loan_maturity_date: new Date(),
         images: [],
-        documents: []
+        documents: [],
+        repayment_terms: ''
       }); // Reset form
     } catch (err) {
       console.error('Error creating asset:', err);
@@ -262,12 +265,13 @@ export const AddAsset: React.FC = () => {
                   state: '',
                   zip_code: '',
                   loan_amount: 0,
-                  term_months: 12,
+                  duration_months: 12,
                   apr: 0,
                   appraised_value: 0,
                   loan_maturity_date: new Date(),
                   images: [],
-                  documents: []
+                  documents: [],
+                  repayment_terms: ''
                 });
               }}
               className="bg-white text-green-600 border border-green-600 px-6 py-2 rounded-lg hover:bg-green-50 transition-colors"
@@ -402,10 +406,10 @@ export const AddAsset: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <Input
-                label="Term (Months)"
-                name="term_months"
+                label="Duration (Months)"
+                name="duration_months"
                 type="number"
-                value={formData.term_months}
+                value={formData.duration_months}
                 onChange={handleChange}
                 required
               />
@@ -420,6 +424,20 @@ export const AddAsset: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-light">
+                  Repayment Terms
+                </label>
+                <textarea
+                  name="repayment_terms"
+                  value={formData.repayment_terms}
+                  onChange={handleChange}
+                  rows={3}
+                  className="w-full px-4 py-2 bg-dark-3 border border-dark-4 rounded-lg text-light focus:ring-1 focus:ring-primary"
+                  placeholder="Enter the repayment terms and conditions..."
+                  required
+                />
+              </div>
               <Input
                 label="Loan Maturity Date"
                 name="loan_maturity_date"

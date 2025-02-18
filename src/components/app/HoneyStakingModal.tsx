@@ -7,6 +7,7 @@ import { FiEdit2 } from 'react-icons/fi';
 import { CheckIcon } from '@heroicons/react/24/outline';
 import { supabase } from '../../lib/supabase';
 import { ExtendedAsset } from '../../lib/types/asset';
+import { StakingInfo } from '../common/StakingInfo';
 
 interface HoneyStakingModalProps {
   isOpen: boolean;
@@ -349,7 +350,10 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
             </div>
 
             <p className="text-sm text-gray-400 mb-4">
-              Staking involves risks. <a href="#" className="text-[#FFD700] hover:text-[#E6C200]">Learn more</a>
+              Staking involves risks. By confirming your staking, you agree to our{' '}
+              <a href="/staking-terms" target="_blank" rel="noopener noreferrer" className="text-[#FFD700] hover:text-[#E6C200]">
+                Staking Terms & Conditions
+              </a>
             </p>
 
             <div className="flex items-center gap-4">
@@ -457,17 +461,21 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
               </div>
             )}
 
-            <button
-              onClick={() => setShowConfirmation(true)}
-              disabled={!amount || Number(amount) <= 0 || Number(amount) > honeyBalance}
-              className="w-full py-3 px-4 rounded-lg text-black font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                background: `url(https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/Honey%20gradient.png)`,
-                backgroundSize: 'cover'
-              }}
-            >
-              Preview stake
-            </button>
+            <div className="px-6">
+              <StakingInfo assetName="Honey" />
+              
+              <button
+                onClick={() => setShowConfirmation(true)}
+                disabled={!amount || Number(amount) <= 0 || Number(amount) > honeyBalance}
+                className="w-full py-3 px-4 rounded-lg text-black font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  background: `url(https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/Honey%20gradient.png)`,
+                  backgroundSize: 'cover'
+                }}
+              >
+                Preview stake
+              </button>
+            </div>
           </>
         )}
       </div>

@@ -25,7 +25,7 @@ interface RawAssetResponse extends BaseAsset {
   debt_assets?: {
     id: string;
     apr: number;
-    term_months: number;
+    duration_months: number;
     loan_amount: number;
     appraised_value: number;
     city: string;
@@ -262,7 +262,7 @@ export const Portfolio: React.FC = () => {
             debt_assets (
               id,
               apr,
-              term_months,
+              duration_months,
               loan_amount,
               appraised_value,
               city,
@@ -843,13 +843,21 @@ export const Portfolio: React.FC = () => {
                   {balance.asset.type === 'cash' && (
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => setShowDepositModal(true)}
+                        onClick={() => {
+                          setSelectedAsset(balance.asset);
+                          setSelectedBalance(balance.balance);
+                          setShowDepositModal(true);
+                        }}
                         className="w-24 whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium bg-gradient-to-r from-[#4bae4f] to-[#90ee90]"
                       >
                         Deposit
                       </button>
                       <button
-                        onClick={() => setShowWithdrawModal(true)}
+                        onClick={() => {
+                          setSelectedAsset(balance.asset);
+                          setSelectedBalance(balance.balance);
+                          setShowWithdrawModal(true);
+                        }}
                         className="w-24 whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
                       >
                         Withdraw

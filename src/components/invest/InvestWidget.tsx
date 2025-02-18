@@ -3,7 +3,7 @@ import { ChevronDownIcon, InformationCircleIcon, CheckCircleIcon } from '@heroic
 import { PencilIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import { Asset } from '../../lib/types/asset';
 import { Tooltip } from '../common/Tooltip';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { transactionService } from '../../lib/services/transactionService';
 import { useAuth } from '../../lib/context/AuthContext';
 import { Transaction } from '../../lib/types/transaction';
@@ -38,9 +38,42 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodData>('usd_balance');
   const [inputError, setInputError] = useState<string | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethodData | null>(null);
+  const [stakingInfo, setStakingInfo] = useState<{ balance: number, xBalance: number } | null>(null);
   
   // Get USD balance
   const usdBalance = balances?.find(b => b.asset.symbol === 'USD')?.balance || 0;
+
+  // Fetch staking info when component mounts
+  useEffect(() => {
+    const fetchStakingInfo = async () => {
+      if (!user?.id || !['BTC', 'HONEY'].includes(asset.symbol)) return;
+
+      try {
+        if (asset.symbol === 'BTC') {
+          const info = await transactionService.getBitcoinStakingInfo(user.id);
+          setStakingInfo({
+            balance: info.bitcoinBalance,
+            xBalance: info.bitcoinXBalance
+          });
+        } else if (asset.symbol === 'HONEY') {
+          const info = await transactionService.getHoneyStakingInfo(user.id);
+          setStakingInfo({
+            balance: info.honeyBalance,
+            xBalance: info.honeyXBalance
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching staking info:', err);
+      }
+    };
+
+    fetchStakingInfo();
+  }, [user?.id, asset.symbol]);
+
+  // Calculate total balance including staked tokens
+  const totalBalance = stakingInfo 
+    ? stakingInfo.balance + stakingInfo.xBalance 
+    : userBalance;
 
   // Calculate amounts based on input type
   const numericAmount = parseFloat(amount) || 0;
@@ -364,7 +397,7 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
 
   return (
     <div className="max-w-lg mx-auto bg-[#1E1E1E] p-6 rounded-2xl shadow-xl border border-light/10">
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-center mb-4">
         <div className="flex-1" />
         <h2 className="flex-1 text-xl font-semibold text-center whitespace-nowrap">
           {widgetState === 'review' ? 'Confirm Investment' : `Invest in ${asset.symbol}`}
@@ -380,28 +413,28 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
           )}
         </div>
       </div>
-      <div className="space-y-6">
+      <div className="space-y-4">
         {validationError && (
-          <div className="p-4 bg-tertiary-pink/10 border border-tertiary-pink rounded-lg text-tertiary-pink">
+          <div className="p-3 bg-tertiary-pink/10 border border-tertiary-pink rounded-lg text-tertiary-pink">
             {validationError}
           </div>
         )}
 
         {/* You're Buying Section */}
-        <div className="bg-light/5 p-4 rounded-xl">
-          <div className="flex justify-between items-center mb-4">
+        <div className="bg-light/5 p-3 rounded-xl">
+          <div className="flex justify-between items-center mb-2">
             <h3 className="text-lg font-bold text-light">You're Buying</h3>
             <div className="flex items-center">
               <span className="text-light/60 text-sm">Your balance:</span>
-              <p className="text-light text-sm ml-2">{formatAmount(userBalance, 'token')} {asset.symbol}</p>
+              <p className="text-light text-sm ml-2">{formatAmount(totalBalance, 'token')} {asset.symbol}</p>
             </div>
           </div>
           
           {/* Amount Type Label */}
-          <p className="text-sm text-light/60 mb-2">Investment amount in:</p>
+          <p className="text-sm text-light/60 mb-1">Investment amount in:</p>
 
           {/* Amount Type Toggle */}
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-2 mb-2">
             <label className="flex items-center cursor-pointer">
               <input
                 type="radio"
@@ -450,21 +483,21 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
                 }
               }}
               disabled={widgetState === 'review'}
-              className={`w-full bg-transparent text-light text-4xl font-medium p-6 focus:outline-none ${
+              className={`w-full bg-transparent text-light text-4xl font-medium py-4 focus:outline-none ${
                 amountType === 'USD' ? 'pl-12' : ''
               }`}
             />
           </div>
 
           {/* Price per token */}
-          <div className="mt-2 text-sm text-light/60">
+          <div className="mt-1 text-sm text-light/60">
             Price per token: ${formatAmount(asset.price_per_token, 'usd')}
           </div>
         </div>
 
         {/* You're Paying With Section */}
         <div className="bg-light/5 p-4 rounded-xl">
-          <h3 className="text-lg font-bold text-light mb-4">You're Paying With</h3>
+          <h3 className="text-lg font-bold text-light mb-3">You're Paying With</h3>
           <div className="relative">
             <select
               value={selectedPaymentMethod || paymentMethod}
@@ -486,7 +519,7 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
           
           {/* Show USD balance if USD payment method selected */}
           {paymentMethod === 'usd_balance' && (
-            <div className="mt-2 text-sm text-light/60">
+            <div className="mt-3 text-sm text-light/60">
               Balance: {formatCurrency(usdBalance)} USD
             </div>
           )}
@@ -494,15 +527,56 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
 
         {/* You Receive Section */}
         <div className="bg-light/5 p-4 rounded-xl">
-          <h3 className="text-lg font-bold text-light mb-4">You Receive</h3>
+          <h3 className="text-lg font-bold text-light mb-3">You Receive</h3>
           <div className="flex items-center">
             <span className="text-light">{formatAmount(tokenAmount, 'token')} {asset.symbol}</span>
           </div>
         </div>
 
         {/* Investment limits info */}
-        <div className="flex flex-col gap-4 mt-2">
-          <div className="flex gap-2">
+        <div className="flex flex-col gap-3">
+          {/* Min/max investment info for debt assets */}
+          {asset.type === 'debt' && (
+            <div className="text-sm text-light/60">
+              Min ${asset.min_investment.toLocaleString()} - Max ${asset.max_investment.toLocaleString()}
+            </div>
+          )}
+
+          {/* Fee info */}
+          <div className="flex items-center justify-between text-sm text-light/60">
+            <div className="flex items-center gap-1">
+              Fee (0.5%)
+              <Tooltip content="Platform fee for processing your investment">
+                <InformationCircleIcon className="w-4 h-4" />
+              </Tooltip>
+            </div>
+            <span>${platformFee.toFixed(2)}</span>
+          </div>
+
+          {/* Agreement Statement - Only show on review screen for Honey */}
+          {widgetState === 'review' && asset.symbol === 'HONEY' && (
+            <p className="text-sm text-light/60 mt-2">
+              By confirming your purchase of Honey (HNX), you agree to the<br />
+              <Link to="/honey-token-agreement" className="text-primary hover:text-primary/80 underline">
+                Honey Token Agreement
+              </Link>
+            </p>
+          )}
+
+          {/* Error Messages */}
+          {inputError && (
+            <div className="border border-red-500/20 bg-red-500/10 text-red-500 p-3 rounded-xl text-sm">
+              {inputError}
+            </div>
+          )}
+          {validationError && !inputError && (
+            <div className="border border-red-500/20 bg-red-500/10 text-red-500 p-3 rounded-xl text-sm">
+              {validationError}
+            </div>
+          )}
+
+          {/* Button Container */}
+          <div className="flex gap-2 mt-2">
             {widgetState === 'review' && (
               <button
                 onClick={handleEdit}
@@ -536,36 +610,6 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
               )}
             </button>
           </div>
-
-          {/* Error Messages */}
-          {inputError && (
-            <div className="border border-red-500/20 bg-red-500/10 text-red-500 p-4 rounded-xl text-sm">
-              {inputError}
-            </div>
-          )}
-          {validationError && !inputError && (
-            <div className="border border-red-500/20 bg-red-500/10 text-red-500 p-4 rounded-xl text-sm">
-              {validationError}
-            </div>
-          )}
-
-          {/* Fee info */}
-          <div className="flex items-center justify-between text-sm text-light/60">
-            <div className="flex items-center gap-1">
-              Fee (0.5%)
-              <Tooltip content="Platform fee for processing your investment">
-                <InformationCircleIcon className="w-4 h-4" />
-              </Tooltip>
-            </div>
-            <span>${platformFee.toFixed(2)}</span>
-          </div>
-
-          {/* Min/max investment info for debt assets */}
-          {asset.type === 'debt' && (
-            <div className="text-sm text-light/60">
-              Min ${asset.min_investment.toLocaleString()} - Max ${asset.max_investment.toLocaleString()}
-            </div>
-          )}
         </div>
       </div>
     </div>
