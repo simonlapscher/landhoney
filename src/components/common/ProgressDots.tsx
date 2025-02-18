@@ -1,33 +1,22 @@
 import React from 'react';
-import { useLocation } from 'react-router-dom';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 
-const ONBOARDING_STEPS = [
-  '/onboarding/create-account',
-  '/onboarding/country',
-  '/onboarding/phone',
-  '/onboarding/tax-info',
-  '/onboarding/agreements',
-  '/onboarding/complete'
-];
-
 export const ProgressDots: React.FC = () => {
-  const location = useLocation();
-  const { showProgress } = useOnboarding();
-
-  if (!showProgress) return null;
-
-  const currentIndex = ONBOARDING_STEPS.indexOf(location.pathname);
+  const { currentStep } = useOnboarding();
+  const totalSteps = 6; // Excluding completion step
 
   return (
-    <div className="flex space-x-2 pt-6">
-      {ONBOARDING_STEPS.map((_, index) => (
+    <div className="flex space-x-2">
+      {Array.from({ length: totalSteps }).map((_, index) => (
         <div
           key={index}
-          className={`w-2 h-2 rounded-full ${
-            index <= currentIndex ? 'bg-primary' : 'bg-light/20'
+          className={`w-2 h-2 rounded-full transition-colors duration-200 ${
+            index + 1 === currentStep
+              ? 'bg-primary'
+              : index + 1 < currentStep
+              ? 'bg-primary/60'
+              : 'bg-light/20'
           }`}
-          data-testid={`progress-dot-${index}`}
         />
       ))}
     </div>

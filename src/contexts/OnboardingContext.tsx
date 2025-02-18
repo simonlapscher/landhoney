@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface OnboardingContextType {
   currentStep: number;
@@ -15,9 +15,32 @@ interface OnboardingProviderProps {
   showProgress: boolean;
 }
 
+// Map routes to step numbers
+const routeStepMap: Record<string, number> = {
+  '/onboarding/verify': 1,
+  '/onboarding/bee-name': 2,
+  '/onboarding/country': 3,
+  '/onboarding/phone': 4,
+  '/onboarding/tax-info': 5,
+  '/onboarding/agreements': 6,
+  '/onboarding/complete': 7
+};
+
 export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children, showProgress }) => {
-  const [currentStep, setCurrentStep] = useState(1);
   const navigate = useNavigate();
+  const location = useLocation();
+  const [currentStep, setCurrentStep] = useState(() => {
+    // Initialize with the correct step based on current route
+    return routeStepMap[location.pathname] || 1;
+  });
+
+  // Keep currentStep in sync with route changes
+  useEffect(() => {
+    const stepForRoute = routeStepMap[location.pathname];
+    if (stepForRoute && stepForRoute !== currentStep) {
+      setCurrentStep(stepForRoute);
+    }
+  }, [location.pathname]);
 
   const nextStep = () => {
     const nextStepNumber = currentStep + 1;
@@ -35,6 +58,7 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
     };
 
     if (stepRoutes[nextStepNumber]) {
+      console.log('Navigating to next step:', stepRoutes[nextStepNumber]);
       navigate(stepRoutes[nextStepNumber]);
     }
   };
@@ -53,6 +77,7 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
     };
 
     if (stepRoutes[prevStepNumber]) {
+      console.log('Navigating to previous step:', stepRoutes[prevStepNumber]);
       navigate(stepRoutes[prevStepNumber]);
     }
   };
