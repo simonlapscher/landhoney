@@ -1,0 +1,1 @@
+export const DEFAULT_BEE_AVATAR = 'https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets//Bee.jpeg'; 

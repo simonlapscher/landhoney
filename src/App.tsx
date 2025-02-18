@@ -37,6 +37,7 @@ import { StakingTerms } from './components/legal/StakingTerms';
 import { HoneyTokenAgreement } from './components/legal/HoneyTokenAgreement';
 import { Referrals } from './pages/admin/Referrals';
 import { ReferAndEarn } from './components/profile/ReferAndEarn';
+import { BeeNameStep } from './components/onboarding/BeeNameStep';
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -101,6 +102,7 @@ const App: React.FC = () => {
             <Route path="agreements" element={<Agreements />} />
             <Route path="complete" element={<Completion />} />
             <Route path="ssn" element={<SSNInput />} />
+            <Route path="bee-name" element={<BeeNameStep />} />
           </Route>
 
           {/* Protected app routes */}
