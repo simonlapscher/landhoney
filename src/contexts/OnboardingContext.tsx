@@ -25,10 +25,13 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
     
     // Map step numbers to routes
     const stepRoutes: Record<number, string> = {
-      1: '/onboarding/email',
+      1: '/onboarding/verify',
       2: '/onboarding/bee-name',
-      3: '/onboarding/phone',
-      4: '/onboarding/complete'
+      3: '/onboarding/country',
+      4: '/onboarding/phone',
+      5: '/onboarding/tax-info',
+      6: '/onboarding/agreements',
+      7: '/onboarding/complete'
     };
 
     if (stepRoutes[nextStepNumber]) {
@@ -41,9 +44,12 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
     setCurrentStep(prevStepNumber);
     
     const stepRoutes: Record<number, string> = {
-      1: '/onboarding/email',
+      1: '/onboarding/verify',
       2: '/onboarding/bee-name',
-      3: '/onboarding/phone'
+      3: '/onboarding/country',
+      4: '/onboarding/phone',
+      5: '/onboarding/tax-info',
+      6: '/onboarding/agreements'
     };
 
     if (stepRoutes[prevStepNumber]) {

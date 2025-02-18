@@ -1,8 +1,18 @@
 // Temporary file to hold placeholder components
-export { CreateAccount } from './CreateAccount';
-export { EmailVerification } from './EmailVerification';
-export { CountrySelection } from './CountrySelection';
-export { PhoneInput } from './PhoneInput';
-export { TaxInfo } from './TaxInfo';
-export { Agreements } from './Agreements';
-export { Completion } from './Completion'; 
+import { CreateAccount } from './CreateAccount';
+import { CountrySelection } from './CountrySelection';
+import { EmailVerificationStep } from './EmailVerificationStep';
+import { PhoneInput } from './PhoneInput';
+import { TaxInfo } from './TaxInfo';
+import { Agreements } from './Agreements';
+import { Completion } from './Completion';
+
+export {
+  CreateAccount,
+  CountrySelection,
+  EmailVerificationStep,
+  PhoneInput,
+  TaxInfo,
+  Agreements,
+  Completion
+}; 
