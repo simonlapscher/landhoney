@@ -21,6 +21,7 @@ interface Transaction {
   user_email: string;
   payment_method: 'usd_balance' | 'bank_account' | 'usdc';
   asset_type: 'debt' | 'commodity' | 'cash';
+  metadata: Record<string, any>;
 }
 
 interface PoolImpact {
@@ -64,6 +65,7 @@ export const PendingTransactions: React.FC = () => {
   const [adminPrice, setAdminPrice] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [poolMainAssetPrice, setPoolMainAssetPrice] = useState<number | null>(null);
 
   const fetchTransactions = async () => {
     try {
@@ -186,107 +188,90 @@ export const PendingTransactions: React.FC = () => {
 
   const handleAction = async (action: 'approve' | 'reject', transaction: Transaction) => {
     try {
+      setIsSubmitting(true);
+      setError(null);
+
+      console.log('Starting handleAction:', {
+        action,
+        transactionId: transaction.id,
+        transactionStatus: transaction.status,
+        transactionType: transaction.type,
+        assetSymbol: transaction.asset_symbol,
+        metadata: transaction.metadata
+      });
+
+      // Get current transaction state
+      const { data: currentTransaction, error: queryError } = await adminSupabase
+        .from('transactions')
+        .select('*')
+        .eq('id', transaction.id)
+        .single();
+
+      console.log('Current transaction state:', {
+        transactionFound: !!currentTransaction,
+        queryError,
+        currentStatus: currentTransaction?.status,
+        metadata: currentTransaction?.metadata
+      });
+
       if (action === 'approve') {
-        // Add debug logging
-        console.log('Transaction details:', {
-          id: transaction.id,
-          asset_symbol: transaction.asset_symbol,
-          asset_type: transaction.asset_type,
-          type: transaction.type,
-          isDirectAsset: ['BTC', 'HONEY'].includes(transaction.asset_symbol),
-          isDebtAsset: transaction.asset_type === 'debt'
+        // Use admin price if set, otherwise use transaction price
+        const finalPrice = adminPrice || transaction.price_per_token;
+        console.log('Using price:', {
+          adminPrice,
+          transactionPrice: transaction.price_per_token,
+          finalPrice
         });
 
-        // Handle deposits and withdrawals separately
-        if (transaction.type === 'deposit' || transaction.type === 'withdraw') {
-          await transactionService.approveDepositWithdrawal({
+        // Process the approval based on transaction type
+        if (transaction.type === 'buy') {
+          console.log('Processing buy transaction approval:', {
+            id: transaction.id,
+            poolId: selectedPool?.id || null,
+            pricePerToken: finalPrice,
+            paymentAmount: transaction.amount * finalPrice,
+            poolMainAssetPrice: poolMainAssetPrice || undefined
+          });
+
+          const result = await transactionService.approveBuyTransaction({
             transactionId: transaction.id,
-            pricePerToken: transaction.price_per_token,
-            amount: transaction.amount
+            poolId: selectedPool?.id || null,
+            pricePerToken: finalPrice,
+            paymentAmount: transaction.amount * finalPrice,
+            poolMainAssetPrice: poolMainAssetPrice || undefined
+          });
+
+          // Show success toast and refresh transactions
+          toast.success('Transaction approved successfully');
+          await fetchTransactions();
+        } else {
+          console.log('Processing sell transaction with params:', {
+            transactionId: transaction.id,
+            poolId: selectedPool?.id || null,
+            pricePerToken: finalPrice,
+            poolReduction: poolImpact?.poolReduction || 0,
+            userTokens: transaction.amount,
+            poolMainAssetPrice
+          });
+
+          await transactionService.approveSellTransaction({
+            transactionId: transaction.id,
+            poolId: selectedPool?.id || null,
+            pricePerToken: finalPrice,
+            poolReduction: poolImpact?.poolReduction || 0,
+            userTokens: transaction.amount,
+            poolMainAssetPrice: poolMainAssetPrice || undefined
           });
           await fetchTransactions();
-          toast.success('Transaction approved successfully');
-          setSelectedTransaction(null);
-          return;
-        }
-
-        const isDirectAsset = ['BTC', 'HONEY'].includes(transaction.asset_symbol);
-        const isDebtAsset = transaction.asset_type === 'debt';
-        const availablePools = findAvailablePools(transaction);
-        const hasAvailablePools = availablePools.length > 0;
-
-        // For direct assets and deposits/withdrawals, use transaction price
-        // If adminPrice is not set, use transaction price as fallback
-        const finalPrice = adminPrice || transaction.price_per_token;
-
-        // Handle direct assets (BTC/HONEY)
-        if (isDirectAsset) {
-          if (transaction.type === 'buy') {
-            await transactionService.approveBuyTransaction({
-              transactionId: transaction.id,
-              poolId: null,
-              pricePerToken: finalPrice,
-              paymentAmount: transaction.amount
-            });
-          } else {
-            await transactionService.approveSellTransaction({
-              transactionId: transaction.id,
-              poolId: null,
-              pricePerToken: finalPrice,
-              poolReduction: 0,
-              userTokens: transaction.amount
-            });
-          }
-          await fetchTransactions();
-          toast.success('Transaction approved successfully');
-          setSelectedTransaction(null);
-          return;
-        }
-
-        // For debt assets
-        if (isDebtAsset) {
-          // For sell transactions, always require pool selection
-          if (transaction.type === 'sell' && !selectedPool?.id) {
-            throw new Error('Please select a pool for the debt asset');
-          }
-          
-          // For buy transactions, only require pool selection if pools are available
-          if (transaction.type === 'buy' && hasAvailablePools && !selectedPool?.id) {
-            throw new Error('Please select a pool to buy the debt asset from');
-          }
-
-          if (transaction.type === 'buy') {
-            await transactionService.approveBuyTransaction({
-              transactionId: transaction.id,
-              poolId: hasAvailablePools && selectedPool ? selectedPool.id : null,
-              pricePerToken: finalPrice,
-              paymentAmount: transaction.amount
-            });
-          } else {
-            await transactionService.approveSellTransaction({
-              transactionId: transaction.id,
-              poolId: selectedPool ? selectedPool.id : null,
-              pricePerToken: finalPrice,
-              poolReduction: poolImpact?.poolReduction || 0,
-              userTokens: transaction.amount
-            });
-          }
-          await fetchTransactions();
-          toast.success('Transaction approved successfully');
-          setSelectedTransaction(null);
-          return;
         }
       } else {
-        setIsSubmitting(true);
+        console.log('Rejecting transaction:', transaction.id);
         await transactionService.rejectTransaction(transaction.id);
-        if (selectedTransaction?.id === transaction.id) {
-          setSelectedTransaction(null);
-        }
         await fetchTransactions();
-        toast.success('Transaction rejected');
       }
     } catch (err) {
       console.error('Detailed error in handleAction:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
       toast.error(err instanceof Error ? err.message : 'Failed to process transaction');
     } finally {
       setIsSubmitting(false);
@@ -506,7 +491,7 @@ export const PendingTransactions: React.FC = () => {
       );
     }
 
-    // For debt assets with available pools, show pool selection
+    // For debt assets with available pools, show pool selection and both price inputs
     return (
       <div className="space-y-4">
         <div>
@@ -553,7 +538,7 @@ export const PendingTransactions: React.FC = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-400 mb-2">
-            Input Agreed Price per Token
+            Input Agreed Price per Token (Debt Asset)
           </label>
           <input
             type="number"
@@ -578,6 +563,36 @@ export const PendingTransactions: React.FC = () => {
             step="0.01"
           />
         </div>
+
+        {selectedPool && (
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              Input Pool Main Asset Price ({selectedPool.type === 'bitcoin' ? 'BTC' : 'HONEY'})
+            </label>
+            <input
+              type="number"
+              className="w-full bg-[#1A1A1A] text-light rounded-lg p-2 border border-gray-700 focus:outline-none focus:ring-2 focus:ring-primary"
+              value={poolMainAssetPrice || ''}
+              onChange={(e) => {
+                const price = parseFloat(e.target.value);
+                setPoolMainAssetPrice(price);
+                if (selectedPool && adminPrice && !isNaN(price)) {
+                  const poolAsset = selectedPool.pool_assets?.find(pa => 
+                    pa.asset.id === transaction.asset_id
+                  );
+                  const availableInPool = Number(poolAsset?.balance) || 0;
+                  const transactionAmount = Number(transaction.amount) || 0;
+                  const fromPool = Math.min(availableInPool, transactionAmount);
+                  const fromOffering = Math.max(0, transactionAmount - fromPool);
+                  calculatePoolImpact(transaction, selectedPool, adminPrice, fromPool, fromOffering);
+                }
+              }}
+              placeholder={`Enter ${selectedPool.type === 'bitcoin' ? 'BTC' : 'HONEY'} price`}
+              min="0"
+              step="0.01"
+            />
+          </div>
+        )}
 
         {poolImpact && selectedPool && (
           <div className="bg-dark-3 rounded-lg p-4 space-y-2">
@@ -623,7 +638,7 @@ export const PendingTransactions: React.FC = () => {
                     <div className="flex justify-between items-center">
                       <span className="text-red-400">
                         - {Number(poolImpact.poolReduction).toFixed(selectedPool.type === 'bitcoin' ? 8 : 2)} {selectedPool.main_asset.symbol} 
-                        (-{formatCurrency(poolImpact.poolReduction * selectedPool.main_asset.price_per_token)} USD)
+                        (-{formatCurrency(poolImpact.poolReduction * (poolMainAssetPrice || selectedPool.main_asset.price_per_token))} USD)
                       </span>
                     </div>
                   )}

@@ -157,6 +157,20 @@ const formatTransactionType = (transaction: Transaction) => {
   }
 };
 
+interface StakingPositionWithPool {
+  id: string;
+  amount: number;
+  ownership_percentage: number;
+  pool: {
+    id: string;
+    type: string;
+    total_value_locked: number;
+    main_asset: {
+      price_per_token: number;
+    };
+  };
+}
+
 export const Portfolio: React.FC = () => {
   const navigate = useNavigate();
   const { user, isLoading: authLoading } = useAuth();
@@ -172,6 +186,7 @@ export const Portfolio: React.FC = () => {
   const [selectedHoneyAsset, setSelectedHoneyAsset] = useState<PortfolioBalance | null>(null);
   const [showUnstakingModal, setShowUnstakingModal] = useState(false);
   const [returns30D, setReturns30D] = useState<number>(0);
+  const [stakingGains, setStakingGains] = useState<number>(0);
   const [showBitcoinStakingModal, setShowBitcoinStakingModal] = useState(false);
   const [showBitcoinUnstakingModal, setShowBitcoinUnstakingModal] = useState(false);
   const [btcBalance, setBtcBalance] = useState<number>(0);
@@ -361,6 +376,42 @@ export const Portfolio: React.FC = () => {
         .reduce((sum, t) => sum + (t.metadata?.usd_amount || 0), 0);
       
       setReturns30D(returns);
+
+      // Get active staking positions to calculate total gains
+      const { data: stakingPositions, error: stakingError } = await supabase
+        .from('staking_positions')
+        .select(`
+          id,
+          amount,
+          ownership_percentage,
+          pool:pools (
+            id,
+            type,
+            total_value_locked,
+            main_asset:assets (
+              price_per_token
+            )
+          )
+        `)
+        .eq('user_id', profile.user_id)
+        .eq('status', 'active');
+
+      if (stakingError) {
+        console.error('Error fetching staking positions:', stakingError);
+      } else if (stakingPositions) {
+        // Calculate total staking gains
+        const positions = stakingPositions as unknown as StakingPositionWithPool[];
+        const totalGains = positions.reduce((sum, position) => {
+          // Calculate initial stake value
+          const initialStakeUSD = position.amount * position.pool.main_asset.price_per_token;
+          // Calculate current value
+          const currentValue = position.ownership_percentage * position.pool.total_value_locked;
+          // Add the return (current value - initial stake) to total gains
+          return sum + (currentValue - initialStakeUSD);
+        }, 0);
+
+        setStakingGains(totalGains);
+      }
 
       console.log('Staking info:', stakingData);
       console.log('Bitcoin staking info:', btcData);
@@ -555,7 +606,7 @@ export const Portfolio: React.FC = () => {
         </div>
 
         {/* Table Headers */}
-        <div className="grid grid-cols-[minmax(250px,2fr)_minmax(200px,1.5fr)_minmax(150px,1fr)_minmax(100px,1fr)_minmax(200px,1fr)] gap-4 px-4 py-2 text-light/60">
+        <div className="grid grid-cols-[minmax(250px,2fr)_minmax(180px,1.5fr)_minmax(130px,1fr)_minmax(80px,0.7fr)_minmax(300px,2fr)] gap-4 px-4 py-2 text-light/60">
           <div className="text-left">Name</div>
           <div className="text-left">Balance</div>
           <div className="text-left">Current Price</div>
@@ -567,7 +618,7 @@ export const Portfolio: React.FC = () => {
         <div className="space-y-2">
           {displayBalances.map(balance => (
             <div key={balance.asset_id} className="grid grid-cols-1 p-3 hover:bg-light/5">
-              <div className="grid grid-cols-[minmax(250px,2fr)_minmax(200px,1.5fr)_minmax(150px,1fr)_minmax(100px,1fr)_minmax(200px,1fr)] gap-4 items-center">
+              <div className="grid grid-cols-[minmax(250px,2fr)_minmax(180px,1.5fr)_minmax(130px,1fr)_minmax(80px,0.7fr)_minmax(300px,2fr)] gap-4 items-center">
                 <div className="flex items-center">
                   <div className="relative">
                     {balance.asset.symbol === 'HONEY' && stakingInfo && (
@@ -646,68 +697,160 @@ export const Portfolio: React.FC = () => {
                 <div className="text-light truncate">
                   {balance.asset.apr ? `${balance.asset.apr.toFixed(2)}%` : 'N/A'}
                 </div>
-                <div>
+                <div className="flex items-center gap-2">
                   {balance.asset.symbol === 'HONEY' && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setShowHoneyStakingModal(true)}
-                        className="whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium"
-                        style={{
-                          background: 'linear-gradient(90deg, #FFD700 0%, #FFA500 100%)'
-                        }}
-                      >
-                        {stakingInfo && stakingInfo.honeyXBalance > 0 ? 'Stake More' : 'Stake'}
-                      </button>
-                      {stakingInfo && stakingInfo.honeyXBalance > 0 && (
+                    <div className="flex items-center gap-1 w-full">
+                      <div className="flex gap-2 flex-1">
+                        {stakingInfo && stakingInfo.honeyXBalance > 0 ? (
+                          <>
+                            <button
+                              onClick={() => setShowHoneyStakingModal(true)}
+                              className="w-28 whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium bg-gradient-to-r from-[#FFD700] to-[#FFA500]"
+                            >
+                              Stake More
+                            </button>
+                            <button
+                              onClick={() => setShowHoneyUnstakingModal(true)}
+                              className="w-28 whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
+                            >
+                              Unstake
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => setShowHoneyStakingModal(true)}
+                            className="w-28 whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium bg-gradient-to-r from-[#FFD700] to-[#FFA500]"
+                          >
+                            Stake
+                          </button>
+                        )}
+                      </div>
+                      <div className="relative">
                         <button
-                          onClick={() => setShowHoneyUnstakingModal(true)}
-                          className="whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const menu = e.currentTarget.nextElementSibling;
+                            document.querySelectorAll('.action-menu').forEach(el => {
+                              if (el !== menu) el.classList.add('hidden');
+                            });
+                            menu?.classList.toggle('hidden');
+                          }}
+                          className="p-2 hover:bg-light/10 rounded-lg"
                         >
-                          Unstake
+                          <svg className="w-6 h-6 text-light" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 3c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 14c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-7c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                          </svg>
                         </button>
-                      )}
+                        <div className="action-menu hidden absolute right-0 mt-2 w-48 bg-[#1A1A1A] rounded-lg shadow-lg border border-light/10 z-50">
+                          <div className="py-1">
+                            <button
+                              onClick={() => navigate('/app/invest/d24940d4-f0d1-4811-811c-5877becd8145')}
+                              className="w-full px-4 py-2 text-left text-light hover:bg-light/10"
+                            >
+                              Buy
+                            </button>
+                            <button
+                              onClick={() => navigate('/app/invest/d24940d4-f0d1-4811-811c-5877becd8145')}
+                              className="w-full px-4 py-2 text-left text-light hover:bg-light/10"
+                            >
+                              Sell
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
                   {balance.asset.symbol === 'BTC' && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setShowBitcoinStakingModal(true)}
-                        className="whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium"
-                        style={{
-                          background: 'linear-gradient(90deg, #F7931A 0%, #FFAB4A 100%)'
-                        }}
-                      >
-                        {(btcStakingInfo && btcStakingInfo.btcXBalance > 0) ? 'Stake More' : 'Stake'}
-                      </button>
-                      {btcStakingInfo && btcStakingInfo.btcXBalance > 0 && (
+                    <div className="flex items-center gap-1 w-full">
+                      <div className="flex gap-2 flex-1">
+                        {btcStakingInfo && btcStakingInfo.btcXBalance > 0 ? (
+                          <>
+                            <button
+                              onClick={() => setShowBitcoinStakingModal(true)}
+                              className="w-28 whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium bg-gradient-to-r from-[#F7931A] to-[#FFAB4A]"
+                            >
+                              Stake More
+                            </button>
+                            <button
+                              onClick={() => setShowBitcoinUnstakingModal(true)}
+                              className="w-28 whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
+                            >
+                              Unstake
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => setShowBitcoinStakingModal(true)}
+                            className="w-28 whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium bg-gradient-to-r from-[#F7931A] to-[#FFAB4A]"
+                          >
+                            Stake
+                          </button>
+                        )}
+                      </div>
+                      <div className="relative">
                         <button
-                          onClick={() => setShowBitcoinUnstakingModal(true)}
-                          className="whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const menu = e.currentTarget.nextElementSibling;
+                            document.querySelectorAll('.action-menu').forEach(el => {
+                              if (el !== menu) el.classList.add('hidden');
+                            });
+                            menu?.classList.toggle('hidden');
+                          }}
+                          className="p-2 hover:bg-light/10 rounded-lg"
                         >
-                          Unstake
+                          <svg className="w-6 h-6 text-light" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 3c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 14c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-7c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                          </svg>
                         </button>
-                      )}
+                        <div className="action-menu hidden absolute right-0 mt-2 w-48 bg-[#1A1A1A] rounded-lg shadow-lg border border-light/10 z-50">
+                          <div className="py-1">
+                            <button
+                              onClick={() => navigate('/app/invest/c1e21c9c-0b97-4363-8b0d-981a0b11d6c1')}
+                              className="w-full px-4 py-2 text-left text-light hover:bg-light/10"
+                            >
+                              Buy
+                            </button>
+                            <button
+                              onClick={() => navigate('/app/invest/c1e21c9c-0b97-4363-8b0d-981a0b11d6c1')}
+                              className="w-full px-4 py-2 text-left text-light hover:bg-light/10"
+                            >
+                              Sell
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
-                  {balance.asset.symbol === 'USD' && (
-                    <div className="flex gap-2">
+                  {balance.asset.type === 'debt' && (
+                    <div className="flex items-center gap-2 w-full">
+                      <div className="flex gap-2 flex-1">
+                        <button
+                          onClick={() => handleActionClick(balance.asset_id, 'invest')}
+                          className="w-24 whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium bg-gradient-to-r from-[#4bae4f] to-[#90ee90]"
+                        >
+                          Invest
+                        </button>
+                        <button
+                          onClick={() => handleActionClick(balance.asset_id, 'sell')}
+                          className="w-24 whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
+                        >
+                          Sell
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {balance.asset.type === 'cash' && (
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => {
-                          setSelectedAsset(balance.asset);
-                          setSelectedBalance(balance.balance);
-                          setShowDepositModal(true);
-                        }}
-                        className="whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium bg-gradient-to-r from-[#4bae4f] to-[#90ee90]"
+                        onClick={() => setShowDepositModal(true)}
+                        className="w-24 whitespace-nowrap px-3 py-2 rounded-lg text-black font-medium bg-gradient-to-r from-[#4bae4f] to-[#90ee90]"
                       >
                         Deposit
                       </button>
                       <button
-                        onClick={() => {
-                          setSelectedAsset(balance.asset);
-                          setSelectedBalance(balance.balance);
-                          setShowWithdrawModal(true);
-                        }}
-                        className="whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
+                        onClick={() => setShowWithdrawModal(true)}
+                        className="w-24 whitespace-nowrap px-3 py-2 rounded-lg text-light font-medium bg-[#2A2A2A] hover:bg-[#3A3A3A]"
                       >
                         Withdraw
                       </button>
@@ -743,19 +886,18 @@ export const Portfolio: React.FC = () => {
 
     return (
       <div>
-        <div className="grid grid-cols-5 gap-4 p-4 text-light/60">
+        <div className="grid grid-cols-4 gap-4 p-4 text-light/60">
           <div className="text-left">Details</div>
           <div className="text-left">Amount</div>
           <div className="text-left">Date</div>
           <div className="text-left">Status</div>
-          <div className="text-left">Actions</div>
         </div>
         
         <div className="divide-y divide-[#2A2A2A]">
           {transactions.map((transaction) => (
             <div
               key={transaction.id}
-              className="grid grid-cols-5 gap-4 p-4 items-center cursor-pointer hover:bg-dark-3/50"
+              className="grid grid-cols-4 gap-4 p-4 items-center cursor-pointer hover:bg-dark-3/50"
               onClick={(e) => handleTransactionClick(transaction, e)}
             >
               <div className="flex items-center space-x-3">
@@ -804,31 +946,6 @@ export const Portfolio: React.FC = () => {
               <div className="flex items-center text-light">
                 {getStatusDot(transaction.status)}
                 <span className="capitalize">{transaction.status}</span>
-              </div>
-
-              <div className="flex space-x-2">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="!bg-[#00D897] hover:!bg-[#00C085] w-[72px]"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleActionClick(transaction.asset_id, 'invest');
-                  }}
-                >
-                  Invest
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="!bg-[#3A3A3A] hover:!bg-[#454545] !text-light w-[72px]"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleActionClick(transaction.asset_id, 'sell');
-                  }}
-                >
-                  Sell
-                </Button>
               </div>
             </div>
           ))}
@@ -921,7 +1038,7 @@ export const Portfolio: React.FC = () => {
               <div>
                 <div className="text-lg font-medium text-light">Staking Gains</div>
                 <div className="text-2xl font-medium text-[#00D54B] mt-2">
-                  {formatCurrency(135.08)}
+                  {formatCurrency(stakingGains)}
                 </div>
               </div>
             </div>
