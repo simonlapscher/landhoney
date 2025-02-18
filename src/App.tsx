@@ -19,7 +19,7 @@ import { PrivacyPolicy } from './components/legal/PrivacyPolicy';
 import { MarketingPreferences } from './components/legal/MarketingPreferences';
 import { SSNInput } from './components/onboarding/SSNInput';
 import { AssetDetail } from './components/invest';
-import { EmailVerification } from './components/onboarding/EmailVerification';
+import { EmailVerificationStep } from './components/onboarding/EmailVerificationStep';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminLogin } from './pages/admin/Login';
 import { PendingTransactions } from './pages/admin/PendingTransactions';
@@ -95,7 +95,7 @@ const App: React.FC = () => {
             <Route index element={<Navigate to="create-account" replace />} />
             <Route path="login" element={<Login />} />
             <Route path="create-account" element={<CreateAccount />} />
-            <Route path="verify" element={<EmailVerification />} />
+            <Route path="verify" element={<EmailVerificationStep />} />
             <Route path="country" element={<CountrySelection />} />
             <Route path="phone" element={<PhoneInput />} />
             <Route path="tax-info" element={<TaxInfo />} />

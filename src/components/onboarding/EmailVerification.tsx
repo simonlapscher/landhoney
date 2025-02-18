@@ -1,131 +1,106 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../lib/context/AuthContext';
+import { useOnboarding } from '../../contexts/OnboardingContext';
+import { supabase } from '../../lib/supabaseClient';
 
-export const EmailVerification: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
+export const EmailVerificationStep: React.FC = () => {
+  const { user } = useAuth();
+  const { nextStep } = useOnboarding();
+  const [isVerified, setIsVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const handleEmailVerification = async () => {
+    const checkEmailVerification = async () => {
+      if (!user) return;
+
       try {
-        console.log('Starting verification with URL:', window.location.href);
+        const { data: { user: currentUser }, error } = await supabase.auth.getUser();
         
-        // Get token from query parameters
-        const queryParams = new URLSearchParams(window.location.search);
-        const token = queryParams.get('token');
-        const type = queryParams.get('type');
+        if (error) throw error;
         
-        console.log('Verification params:', { token: !!token, type });
-
-        if (!token) {
-          throw new Error('No verification token found');
+        if (currentUser?.email_confirmed_at) {
+          setIsVerified(true);
+          handleVerificationSuccess();
         }
-
-        // Verify the signup token
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-          token_hash: token,
-          type: type as any || 'signup'
-        });
-
-        if (verifyError) {
-          console.error('Verification error:', verifyError);
-          throw verifyError;
-        }
-
-        // Get the current session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-        if (sessionError) throw sessionError;
-        if (!session?.user) throw new Error('No user found after verification');
-
-        console.log('User verified successfully:', session.user.id);
-
-        // Check if profile exists
-        const { data: existingProfile, error: fetchError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .single();
-
-        if (fetchError && fetchError.code !== 'PGRST116') {
-          console.error('Profile fetch error:', fetchError);
-          throw fetchError;
-        }
-
-        if (!existingProfile) {
-          console.log('Creating new profile');
-          const { error: insertError } = await supabase
-            .from('profiles')
-            .insert({
-              user_id: session.user.id,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            });
-
-          if (insertError) {
-            console.error('Profile creation error:', insertError);
-            throw insertError;
-          }
-        }
-
-        // Update user metadata
-        const { error: updateError } = await supabase.auth.updateUser({
-          data: { needs_profile_creation: false }
-        });
-
-        if (updateError) {
-          console.error('Error updating user metadata:', updateError);
-        }
-
-        // Redirect to country selection
-        navigate('/onboarding/country');
-      } catch (error) {
-        console.error('Verification error:', error);
-        setError(error instanceof Error ? error.message : 'An error occurred during verification');
-      } finally {
-        setLoading(false);
+      } catch (err) {
+        console.error('Error checking email verification:', err);
+        setError('Failed to check email verification status');
       }
     };
 
-    handleEmailVerification();
-  }, [navigate]);
+    const interval = setInterval(checkEmailVerification, 5000);
+    return () => clearInterval(interval);
+  }, [user]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
+  const handleVerificationSuccess = async () => {
+    try {
+      // Update user metadata
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: { needs_profile_creation: false }
+      });
+
+      if (updateError) {
+        console.error('Error updating user metadata:', updateError);
+      }
+
+      // Get the current session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) throw sessionError;
+      if (!session?.user) throw new Error('No user found after verification');
+
+      // Check if profile exists
+      const { data: existingProfile, error: fetchError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('Profile fetch error:', fetchError);
+        throw fetchError;
+      }
+
+      if (!existingProfile) {
+        console.log('Creating new profile');
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({
+            user_id: session.user.id,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+
+        if (insertError) {
+          console.error('Profile creation error:', insertError);
+          throw insertError;
+        }
+      }
+
+      // Use the onboarding context to move to the next step (bee name)
+      nextStep();
+    } catch (err) {
+      console.error('Error in verification success:', err);
+      setError('Failed to complete verification process');
+    }
+  };
+
+  return (
+    <div className="max-w-md mx-auto px-4">
+      <h1 className="text-2xl font-bold text-center mb-8">Verify Your Email</h1>
+      
+      {error ? (
+        <p className="text-red-500 text-center">{error}</p>
+      ) : isVerified ? (
+        <p className="text-green-500 text-center">Email verified! Redirecting...</p>
+      ) : (
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-light">Verifying your email...</p>
+          <p className="mb-4">We've sent a verification link to your email.</p>
+          <p className="text-sm text-light/60">
+            Please check your inbox and click the verification link to continue.
+          </p>
         </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="text-red-500 mb-4">⚠️</div>
-          <h2 className="text-xl font-semibold text-light mb-2">Verification Error</h2>
-          <p className="text-light/60">{error}</p>
-          <div className="mt-4 space-y-2">
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-primary text-dark rounded-lg hover:bg-primary/90"
-            >
-              Try Again
-            </button>
-            <p className="text-sm text-light/60">
-              If the error persists, please request a new verification email.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return null;
+      )}
+    </div>
+  );
 }; 
