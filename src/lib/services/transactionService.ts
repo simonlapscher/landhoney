@@ -1020,20 +1020,31 @@ export const transactionService = {
     amount,
     pricePerToken,
     paymentMethod
-  }: {
-    userId: string;
-    assetId: string;
-    amount: number;
-    pricePerToken: number;
-    paymentMethod: PaymentMethod;
-  }) {
+  }: CreateBuyTransactionParams) {
     try {
+      console.log('Starting createBuyTransaction:', {
+        userId,
+        assetId,
+        amount,
+        pricePerToken,
+        paymentMethod
+      });
+
       if (paymentMethod === 'usd_balance') {
         // Calculate fee and total amount
         const fee = amount * pricePerToken * 0.005; // 0.5% fee
         const totalToPay = amount * pricePerToken + fee;
 
-        // Create USD balance order using new function
+        console.log('Creating USD balance order with params:', {
+          p_user_id: userId,
+          p_asset_id: assetId,
+          p_amount: amount,
+          p_price_per_token: pricePerToken,
+          p_fee: fee,
+          p_total_to_pay: totalToPay
+        });
+
+        // Create USD balance order using RPC function
         const { data: transaction, error: createError } = await supabase.rpc(
           'create_usd_balance_order',
           {
@@ -1047,13 +1058,35 @@ export const transactionService = {
         );
 
         if (createError) {
-          console.error('Error creating USD balance order:', createError);
+          console.error('Error creating USD balance order:', {
+            error: createError,
+            params: {
+              userId,
+              assetId,
+              amount,
+              pricePerToken,
+              fee,
+              totalToPay
+            }
+          });
           throw createError;
         }
+
+        console.log('USD balance order created:', {
+          transactionId: transaction.id,
+          status: transaction.status,
+          metadata: transaction.metadata
+        });
 
         return transaction;
       } else {
         // For bank/USDC payments, create pending transaction
+        console.log('Creating pending transaction for non-USD payment:', {
+          paymentMethod,
+          amount,
+          pricePerToken
+        });
+
         const { data, error } = await supabase
           .from('transactions')
           .insert({
@@ -1063,7 +1096,6 @@ export const transactionService = {
             amount: amount,
             price_per_token: pricePerToken,
             status: 'pending',
-            payment_method: paymentMethod,
             metadata: {
               fee_usd: amount * pricePerToken * 0.005,
               payment_method: paymentMethod
@@ -1072,11 +1104,30 @@ export const transactionService = {
           .select()
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error('Error creating pending transaction:', {
+            error,
+            params: {
+              userId,
+              assetId,
+              amount,
+              pricePerToken,
+              paymentMethod
+            }
+          });
+          throw error;
+        }
+
+        console.log('Pending transaction created:', {
+          transactionId: data.id,
+          status: data.status,
+          metadata: data.metadata
+        });
+
         return data;
       }
     } catch (error) {
-      console.error('Error creating buy transaction:', error);
+      console.error('Error in createBuyTransaction:', error);
       throw error;
     }
   },

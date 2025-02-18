@@ -522,7 +522,7 @@ export const Portfolio: React.FC = () => {
   };
 
   const handleActionClick = (assetId: string, action: 'invest' | 'sell') => {
-    navigate(`/app/assets/${assetId}${action === 'invest' ? '?widget=buy' : ''}`);
+    navigate(`/app/invest/${assetId}${action === 'invest' ? '' : '?widget=sell'}`);
   };
 
   const getStatusDot = (status: string) => {

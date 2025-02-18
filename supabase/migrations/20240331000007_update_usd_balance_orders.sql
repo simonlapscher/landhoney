@@ -8,7 +8,7 @@ DROP FUNCTION IF EXISTS process_buy_transaction(UUID, UUID, DECIMAL, DECIMAL);
 CREATE OR REPLACE FUNCTION create_usd_balance_order(
   p_user_id UUID,
   p_asset_id UUID,
-  p_amount DECIMAL,  -- This represents USD amount for commodities/pool assets, token amount for direct debt assets
+  p_amount DECIMAL,
   p_price_per_token DECIMAL,
   p_fee DECIMAL,
   p_total_to_pay DECIMAL
@@ -49,6 +49,7 @@ BEGIN
 
   -- For debt assets from direct offering (not in pool) or USD, create completed transaction
   IF (v_asset_type = 'debt' AND v_pool_id IS NULL) OR v_asset_type = 'cash' THEN
+    -- Create completed transaction
     INSERT INTO transactions (
       user_id,
       asset_id,
@@ -62,13 +63,13 @@ BEGIN
       p_user_id,
       p_asset_id,
       'buy',
-      p_amount,  -- For direct offerings, this is already the token amount
+      p_amount,
       p_price_per_token,
       'completed',
       jsonb_build_object(
         'fee_usd', p_fee,
         'payment_method', 'usd_balance',
-        'usd_amount', p_amount
+        'usd_amount', p_total_to_pay - p_fee
       ),
       NOW()
     ) RETURNING * INTO v_transaction;
@@ -86,12 +87,11 @@ BEGIN
     VALUES (p_user_id, p_asset_id, p_amount)
     ON CONFLICT (user_id, asset_id)
     DO UPDATE SET 
-      balance = user_balances.balance + EXCLUDED.balance,
+      balance = user_balances.balance + p_amount,
       updated_at = NOW(),
       last_transaction_at = NOW();
-
-  -- For pool assets or commodities, create pending transaction
   ELSE
+    -- For pool assets or commodities, create pending transaction
     INSERT INTO transactions (
       user_id,
       asset_id,
@@ -104,15 +104,15 @@ BEGIN
       p_user_id,
       p_asset_id,
       'buy',
-      p_amount,  -- Store USD amount for commodities
+      p_amount,
       p_price_per_token,
       'pending',
       jsonb_build_object(
         'fee_usd', p_fee,
         'payment_method', 'usd_balance',
         'pool_id', v_pool_id,
-        'usd_amount', p_amount,  -- Store the USD amount user wants to spend
-        'is_commodity', v_asset_type = 'commodity'  -- Flag to indicate if this is a commodity
+        'usd_amount', p_total_to_pay - p_fee,
+        'is_commodity', v_asset_type = 'commodity'
       )
     ) RETURNING * INTO v_transaction;
   END IF;
