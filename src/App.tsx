@@ -38,6 +38,7 @@ import { HoneyTokenAgreement } from './components/legal/HoneyTokenAgreement';
 import { Referrals } from './pages/admin/Referrals';
 import { ReferAndEarn } from './components/profile/ReferAndEarn';
 import { BeeNameStep } from './components/onboarding/BeeNameStep';
+import { ReferralStep } from './components/onboarding/ReferralStep';
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -96,13 +97,14 @@ const App: React.FC = () => {
             <Route path="login" element={<Login />} />
             <Route path="create-account" element={<CreateAccount />} />
             <Route path="verify" element={<EmailVerificationStep />} />
+            <Route path="referral" element={<ReferralStep />} />
+            <Route path="bee-name" element={<BeeNameStep />} />
             <Route path="country" element={<CountrySelection />} />
             <Route path="phone" element={<PhoneInput />} />
             <Route path="tax-info" element={<TaxInfo />} />
             <Route path="agreements" element={<Agreements />} />
             <Route path="complete" element={<Completion />} />
             <Route path="ssn" element={<SSNInput />} />
-            <Route path="bee-name" element={<BeeNameStep />} />
           </Route>
 
           {/* Protected app routes */}

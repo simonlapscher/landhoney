@@ -96,9 +96,9 @@ export const AuthCallback: React.FC = () => {
           // Don't throw here, just log the error as this is not critical
         }
 
-        // Redirect to bee name step
-        console.log('All steps completed, redirecting to bee name step');
-        navigate('/onboarding/bee-name');
+        // Redirect to referral step
+        console.log('All steps completed, redirecting to referral step');
+        navigate('/onboarding/referral');
       } catch (err) {
         console.error('Auth callback error:', err);
         setError(err instanceof Error ? err.message : 'An error occurred during verification');

@@ -18,12 +18,13 @@ interface OnboardingProviderProps {
 // Map routes to step numbers
 const routeStepMap: Record<string, number> = {
   '/onboarding/verify': 1,
-  '/onboarding/bee-name': 2,
-  '/onboarding/country': 3,
-  '/onboarding/phone': 4,
-  '/onboarding/tax-info': 5,
-  '/onboarding/agreements': 6,
-  '/onboarding/complete': 7
+  '/onboarding/referral': 2,
+  '/onboarding/bee-name': 3,
+  '/onboarding/country': 4,
+  '/onboarding/phone': 5,
+  '/onboarding/tax-info': 6,
+  '/onboarding/agreements': 7,
+  '/onboarding/complete': 8
 };
 
 export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children, showProgress }) => {
@@ -49,12 +50,13 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
     // Map step numbers to routes
     const stepRoutes: Record<number, string> = {
       1: '/onboarding/verify',
-      2: '/onboarding/bee-name',
-      3: '/onboarding/country',
-      4: '/onboarding/phone',
-      5: '/onboarding/tax-info',
-      6: '/onboarding/agreements',
-      7: '/onboarding/complete'
+      2: '/onboarding/referral',
+      3: '/onboarding/bee-name',
+      4: '/onboarding/country',
+      5: '/onboarding/phone',
+      6: '/onboarding/tax-info',
+      7: '/onboarding/agreements',
+      8: '/onboarding/complete'
     };
 
     if (stepRoutes[nextStepNumber]) {
@@ -69,11 +71,12 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
     
     const stepRoutes: Record<number, string> = {
       1: '/onboarding/verify',
-      2: '/onboarding/bee-name',
-      3: '/onboarding/country',
-      4: '/onboarding/phone',
-      5: '/onboarding/tax-info',
-      6: '/onboarding/agreements'
+      2: '/onboarding/referral',
+      3: '/onboarding/bee-name',
+      4: '/onboarding/country',
+      5: '/onboarding/phone',
+      6: '/onboarding/tax-info',
+      7: '/onboarding/agreements'
     };
 
     if (stepRoutes[prevStepNumber]) {

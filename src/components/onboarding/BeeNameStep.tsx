@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../lib/context/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import { DEFAULT_BEE_AVATAR } from '../../lib/constants';
+import { styles } from '../../utils/styles';
 
 export const BeeNameStep: React.FC = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const { nextStep } = useOnboarding();
   const [beeName, setBeeName] = useState('');
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
@@ -102,11 +101,13 @@ export const BeeNameStep: React.FC = () => {
   };
 
   return (
-    <div className="max-w-md mx-auto px-4">
-      <h1 className="text-2xl font-bold text-center mb-8">Choose Your Bee Name</h1>
+    <div className={`${styles.container} space-y-6`}>
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-light">Choose Your Bee Name</h2>
+      </div>
       
-      <div className="flex flex-col items-center mb-8">
-        <div className="relative w-24 h-24 mb-4">
+      <div className="flex flex-col items-center mb-4">
+        <div className="relative w-24 h-24">
           <img
             src={avatarUrl}
             alt="Profile"
@@ -115,7 +116,7 @@ export const BeeNameStep: React.FC = () => {
           <label className="absolute bottom-0 right-0 bg-primary hover:bg-primary/80 rounded-full p-2 cursor-pointer">
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5 text-white"
+              className="h-5 w-5 text-dark"
               viewBox="0 0 20 20"
               fill="currentColor"
             >
@@ -139,9 +140,9 @@ export const BeeNameStep: React.FC = () => {
               type="text"
               value={beeName}
               onChange={(e) => setBeeName(e.target.value)}
-              className={`w-full px-4 py-2 bg-dark-2 rounded-lg border ${
+              className={`w-full px-4 py-3 bg-[#1A1A1A] text-light rounded-lg border ${
                 isAvailable ? 'border-green-500' : 'border-light/10'
-              } focus:outline-none focus:ring-2 focus:ring-primary`}
+              } focus:outline-none focus:ring-2 focus:ring-primary placeholder-light/40`}
               placeholder="Enter your Bee Name"
             />
             {beeName && !isChecking && (
@@ -163,7 +164,7 @@ export const BeeNameStep: React.FC = () => {
         <button
           type="submit"
           disabled={!isAvailable || !beeName}
-          className="w-full py-3 px-4 bg-primary hover:bg-primary/80 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full py-3 px-4 bg-primary hover:bg-primary/80 text-dark font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Continue
         </button>
