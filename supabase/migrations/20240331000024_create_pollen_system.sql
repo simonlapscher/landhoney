@@ -78,7 +78,11 @@ CREATE VIEW pollen_leaderboard AS
 SELECT 
     pb.user_id,
     COALESCE(p.bee_name, u.email) as bee_name,
-    p.avatar_url,
+    CASE 
+        WHEN p.avatar_url IS NOT NULL THEN 
+            'https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/avatars/' || p.avatar_url
+        ELSE NULL
+    END as avatar_url,
     pb.current_period_balance as current_period_pollen,
     pb.total_balance as total_pollen,
     RANK() OVER (ORDER BY pb.current_period_balance DESC) as current_rank,

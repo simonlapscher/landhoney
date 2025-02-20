@@ -63,14 +63,14 @@ export const ProfilePage: React.FC = () => {
         routingNumber: data.bank_routing_number || ''
       });
 
+      // Set the avatar URL with the full public URL if it exists
       if (data.avatar_url) {
-        const { data: avatarData } = await supabase.storage
+        const { data: { publicUrl } } = supabase.storage
           .from('avatars')
-          .download(data.avatar_url);
-        if (avatarData) {
-          const url = URL.createObjectURL(avatarData);
-          setAvatarUrl(url);
-        }
+          .getPublicUrl(data.avatar_url);
+        setAvatarUrl(publicUrl);
+      } else {
+        setAvatarUrl(null);
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -111,8 +111,21 @@ export const ProfilePage: React.FC = () => {
       let updateData = {};
       switch (field) {
         case 'displayName':
-          updateData = { display_name: formData.displayName.trim() };
-          break;
+          // Call the RPC function to update both display name and bee name
+          const { data: updatedProfile, error: rpcError } = await supabase.rpc(
+            'update_profile_display_name',
+            { 
+              p_user_id: user?.id,
+              p_display_name: formData.displayName.trim(),
+              p_bee_name: formData.displayName.trim()
+            }
+          );
+          
+          if (rpcError) throw rpcError;
+          setProfile(updatedProfile);
+          setEditingField(null);
+          toast.success('Display name and bee name updated');
+          return;
         case 'email':
           updateData = { email: formData.email.trim() };
           break;
@@ -179,8 +192,12 @@ export const ProfilePage: React.FC = () => {
         throw updateError;
       }
 
-      const url = URL.createObjectURL(file);
-      setAvatarUrl(url);
+      // Get the public URL for the uploaded file
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      setAvatarUrl(publicUrl);
       toast.success('Profile picture updated');
     } catch (error) {
       console.error('Error uploading avatar:', error);
