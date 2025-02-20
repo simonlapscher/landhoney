@@ -15,6 +15,15 @@ interface User {
   email: string;
 }
 
+// Add a mock PLN asset for the UI
+const POLLEN_ASSET = {
+  id: 'pollen',
+  name: 'Pollen',
+  symbol: 'PLN',
+  price_per_token: 0,
+  type: 'pollen'
+};
+
 export const TokenMinting: React.FC = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -38,7 +47,8 @@ export const TokenMinting: React.FC = () => {
           .order('name');
 
         if (error) throw error;
-        setAssets(data || []);
+        // Add Pollen as a mintable asset
+        setAssets([POLLEN_ASSET, ...(data || [])]);
       } catch (err) {
         console.error('Error fetching assets:', err);
         setError('Failed to load assets');
@@ -90,6 +100,8 @@ export const TokenMinting: React.FC = () => {
 
   const calculateUsdAmount = () => {
     if (!selectedAsset || !amount) return 0;
+    // Return 0 for pollen since it has no USD value
+    if (selectedAsset.id === 'pollen') return 0;
     return isTokenAmount 
       ? parseFloat(amount) * selectedAsset.price_per_token
       : parseFloat(amount);
@@ -111,14 +123,28 @@ export const TokenMinting: React.FC = () => {
     try {
       const tokenAmount = isTokenAmount 
         ? parseFloat(amount)
-        : parseFloat(amount) / selectedAsset.price_per_token;
+        : parseFloat(amount) / (selectedAsset.price_per_token || 1); // Use 1 for pollen to avoid division by zero
 
-      await adminSupabase.rpc('mint_tokens', {
-        p_user_id: selectedUser.id,
-        p_asset_id: selectedAsset.id,
-        p_amount: tokenAmount,
-        p_price_per_token: selectedAsset.price_per_token
-      });
+      if (selectedAsset.id === 'pollen') {
+        // Use award_pollen for pollen minting
+        await adminSupabase.rpc('award_pollen', {
+          p_user_id: selectedUser.id,
+          p_amount: tokenAmount,
+          p_distribution_type: 'admin_mint',
+          p_metadata: {
+            source: 'admin_minting',
+            minted_by: (await adminSupabase.auth.getUser()).data.user?.id
+          }
+        });
+      } else {
+        // Regular token minting for other assets
+        await adminSupabase.rpc('mint_tokens', {
+          p_user_id: selectedUser.id,
+          p_asset_id: selectedAsset.id,
+          p_amount: tokenAmount,
+          p_price_per_token: selectedAsset.price_per_token
+        });
+      }
 
       setSuccess({
         amount: `${tokenAmount.toFixed(8)} ${selectedAsset.symbol}`,
@@ -297,10 +323,12 @@ export const TokenMinting: React.FC = () => {
                   <span className="text-light/60">Token Amount</span>
                   <span className="text-light">{calculateTokenAmount().toFixed(4)} {selectedAsset?.symbol}</span>
                 </div>
-                <div className="flex justify-between py-2 border-b border-light/10">
-                  <span className="text-light/60">USD Value</span>
-                  <span className="text-light">{formatCurrency(calculateUsdAmount())}</span>
-                </div>
+                {selectedAsset?.id !== 'pollen' && (
+                  <div className="flex justify-between py-2 border-b border-light/10">
+                    <span className="text-light/60">USD Value</span>
+                    <span className="text-light">{formatCurrency(calculateUsdAmount())}</span>
+                  </div>
+                )}
               </div>
 
               {error && (

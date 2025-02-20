@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WelcomeScreen } from './components/onboarding/WelcomeScreen';
 import { OnboardingLayout } from './components/layouts/OnboardingLayout';
 import { ProtectedLayout } from './components/layouts/ProtectedLayout';
@@ -39,6 +40,10 @@ import { Referrals } from './pages/admin/Referrals';
 import { ReferAndEarn } from './components/profile/ReferAndEarn';
 import { BeeNameStep } from './components/onboarding/BeeNameStep';
 import { ReferralStep } from './components/onboarding/ReferralStep';
+import { PollenLeaderboard } from './components/app/PollenLeaderboard';
+import { PollenRewards } from './pages/admin/PollenRewards';
+
+const queryClient = new QueryClient();
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -61,75 +66,79 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <AuthProvider>
-      <Toaster position="top-right" />
-      <BrowserRouter>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<WelcomeScreen />} />
-          <Route path="/auth/callback" element={<AuthCallback />} />
-          
-          {/* Legal routes */}
-          <Route path="/terms" element={<TermsOfService />} />
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="/marketing" element={<MarketingPreferences />} />
-          <Route path="/staking-terms" element={<StakingTerms />} />
-          <Route path="/honey-token-agreement" element={<HoneyTokenAgreement />} />
-          
-          {/* Admin routes */}
-          <Route path="/admin">
-            <Route path="login" element={<AdminLogin />} />
-            <Route element={<AdminLayout />}>
-              <Route path="transactions" element={<PendingTransactions />} />
-              <Route path="prices" element={<PriceManagement />} />
-              <Route path="loans" element={<LoanDistribution />} />
-              <Route path="payouts" element={<PayoutHistory />} />
-              <Route path="mint" element={<TokenMinting />} />
-              <Route path="add-asset" element={<AddAsset />} />
-              <Route path="referrals" element={<Referrals />} />
-              <Route index element={<Navigate to="transactions" replace />} />
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <Toaster position="top-right" />
+        <BrowserRouter>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<WelcomeScreen />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
+            
+            {/* Legal routes */}
+            <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/marketing" element={<MarketingPreferences />} />
+            <Route path="/staking-terms" element={<StakingTerms />} />
+            <Route path="/honey-token-agreement" element={<HoneyTokenAgreement />} />
+            
+            {/* Admin routes */}
+            <Route path="/admin">
+              <Route path="login" element={<AdminLogin />} />
+              <Route element={<AdminLayout />}>
+                <Route path="transactions" element={<PendingTransactions />} />
+                <Route path="prices" element={<PriceManagement />} />
+                <Route path="loans" element={<LoanDistribution />} />
+                <Route path="payouts" element={<PayoutHistory />} />
+                <Route path="mint" element={<TokenMinting />} />
+                <Route path="add-asset" element={<AddAsset />} />
+                <Route path="referrals" element={<Referrals />} />
+                <Route path="pollen" element={<PollenRewards />} />
+                <Route index element={<Navigate to="transactions" replace />} />
+              </Route>
             </Route>
-          </Route>
-          
-          {/* Onboarding routes */}
-          <Route path="/onboarding" element={<OnboardingLayout />}>
-            <Route index element={<Navigate to="create-account" replace />} />
-            <Route path="login" element={<Login />} />
-            <Route path="create-account" element={<CreateAccount />} />
-            <Route path="verify" element={<EmailVerificationStep />} />
-            <Route path="referral" element={<ReferralStep />} />
-            <Route path="bee-name" element={<BeeNameStep />} />
-            <Route path="country" element={<CountrySelection />} />
-            <Route path="phone" element={<PhoneInput />} />
-            <Route path="tax-info" element={<TaxInfo />} />
-            <Route path="agreements" element={<Agreements />} />
-            <Route path="complete" element={<Completion />} />
-            <Route path="ssn" element={<SSNInput />} />
-          </Route>
+            
+            {/* Onboarding routes */}
+            <Route path="/onboarding" element={<OnboardingLayout />}>
+              <Route index element={<Navigate to="create-account" replace />} />
+              <Route path="login" element={<Login />} />
+              <Route path="create-account" element={<CreateAccount />} />
+              <Route path="verify" element={<EmailVerificationStep />} />
+              <Route path="referral" element={<ReferralStep />} />
+              <Route path="bee-name" element={<BeeNameStep />} />
+              <Route path="country" element={<CountrySelection />} />
+              <Route path="phone" element={<PhoneInput />} />
+              <Route path="tax-info" element={<TaxInfo />} />
+              <Route path="agreements" element={<Agreements />} />
+              <Route path="complete" element={<Completion />} />
+              <Route path="ssn" element={<SSNInput />} />
+            </Route>
 
-          {/* Protected app routes */}
-          <Route path="/app" element={<ProtectedLayout />}>
-            <Route index element={<Navigate to="portfolio" replace />} />
-            <Route path="profile" element={<ProfilePage />} />
-            <Route path="portfolio" element={<Portfolio />} />
-            <Route path="invest" element={<Invest />} />
-            <Route path="invest/:id" element={<AssetDetail />} />
-            <Route path="refer-and-earn" element={<ReferAndEarn />} />
-            <Route 
-              path="liquid-reserve" 
-              element={
-                <React.Suspense fallback={<div>Loading...</div>}>
-                  <LiquidReserve />
-                </React.Suspense>
-              } 
-            />
-          </Route>
+            {/* Protected app routes */}
+            <Route path="/app" element={<ProtectedLayout />}>
+              <Route index element={<Navigate to="portfolio" replace />} />
+              <Route path="profile" element={<ProfilePage />} />
+              <Route path="portfolio" element={<Portfolio />} />
+              <Route path="invest" element={<Invest />} />
+              <Route path="invest/:id" element={<AssetDetail />} />
+              <Route path="refer-and-earn" element={<ReferAndEarn />} />
+              <Route 
+                path="liquid-reserve" 
+                element={
+                  <React.Suspense fallback={<div>Loading...</div>}>
+                    <LiquidReserve />
+                  </React.Suspense>
+                } 
+              />
+              <Route path="pollen" element={<PollenLeaderboard />} />
+            </Route>
 
-          {/* Catch all route */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+            {/* Catch all route */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 };
 

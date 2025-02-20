@@ -47,7 +47,7 @@ export const TaxInfo: React.FC = () => {
         </div>
         <h2 className="text-2xl font-bold text-light">Tax Information</h2>
         <p className="text-light/80 mt-2">
-          Please provide your Social Security or tax identification number. We will use this to create your tax documents.
+          Please provide your Social Security Number or Tax Identification Number. We will encrypt this information and use it to create your tax documents.
         </p>
       </div>
 

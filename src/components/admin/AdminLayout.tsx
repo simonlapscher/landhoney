@@ -8,7 +8,8 @@ import {
   BanknotesIcon,
   DocumentCheckIcon,
   UserPlusIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  TrophyIcon
 } from '@heroicons/react/24/outline';
 
 const menuItems = [
@@ -18,7 +19,8 @@ const menuItems = [
   { path: 'payouts', label: 'Payout History', icon: DocumentCheckIcon },
   { path: 'mint', label: 'Token Minting', icon: UserPlusIcon },
   { path: 'add-asset', label: 'Add Asset', icon: BanknotesIcon },
-  { path: 'referrals', label: 'Referrals', icon: BanknotesIcon }
+  { path: 'referrals', label: 'Referrals', icon: BanknotesIcon },
+  { path: 'pollen', label: 'Leaderboard', icon: TrophyIcon }
 ];
 
 export const AdminLayout: React.FC = () => {

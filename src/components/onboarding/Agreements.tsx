@@ -97,7 +97,7 @@ export const Agreements: React.FC = () => {
               className="min-w-[20px] min-h-[20px] w-5 h-5 text-primary focus:ring-primary rounded border-light/20"
             />
             <span className="flex-1 text-light whitespace-nowrap">
-              I agree to receive marketing communications <span className="text-light/60 ml-1">(optional)</span>
+              I want to receive occassional exciting announcements and company updates <span className="text-light/60 ml-1">(optional)</span>
             </span>
           </label>
         </div>

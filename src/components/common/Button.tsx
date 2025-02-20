@@ -19,7 +19,7 @@ export const Button: React.FC<ButtonProps> = ({
   const baseClasses = 'font-semibold rounded-lg transition-all duration-200 flex items-center justify-center';
   
   const variantClasses = {
-    primary: 'bg-primary hover:bg-primary/90 text-dark disabled:bg-primary/50',
+    primary: 'bg-gradient-to-r from-[#FFD700] to-[#FFA500] hover:from-[#FFE44D] hover:to-[#FFB732] text-dark disabled:opacity-50',
     secondary: 'bg-dark-800 hover:bg-dark-700 text-light disabled:bg-dark-800/50'
   };
 

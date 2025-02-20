@@ -6,7 +6,8 @@ import {
   BanknotesIcon, 
   WalletIcon,
   BeakerIcon,
-  UserPlusIcon
+  UserPlusIcon,
+  TrophyIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../lib/context/AuthContext';
 
@@ -45,6 +46,7 @@ export const ProtectedLayout: React.FC = () => {
     { path: 'portfolio', label: 'My Assets', icon: WalletIcon },
     { path: 'liquid-reserve', label: 'Liquid Reserve', icon: BeakerIcon },
     { path: 'refer-and-earn', label: 'Refer & Earn', icon: UserPlusIcon },
+    { path: 'pollen', label: 'Leaderboard', icon: TrophyIcon },
   ];
 
   return (
