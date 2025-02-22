@@ -1,166 +1,117 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../lib/context/AuthContext';
+import { supabase } from '../../lib/supabase';
+import { transactionService } from '../../lib/services/transactionService';
+import type { Transaction, PortfolioBalance, FilterType, StakingInfo, BitcoinStakingInfo, StakingPositionWithPool } from '../../lib/types/portfolio';
+import type { ExtendedAsset, SimpleAsset } from '../../lib/types/asset';
 
-const fetchPortfolioData = async (isBackgroundRefresh = false) => {
+export const Portfolio: React.FC = () => {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [balances, setBalances] = useState<PortfolioBalance[]>([]);
+  const [filter, setFilter] = useState<FilterType>('all');
+  const [stakingInfo, setStakingInfo] = useState<StakingInfo | null>(null);
+  const [bitcoinStakingInfo, setBitcoinStakingInfo] = useState<BitcoinStakingInfo | null>(null);
+
+  const fetchPortfolioData = async (isBackgroundRefresh = false) => {
     if (!user) return;
 
-    try {
-      if (!isBackgroundRefresh) {
-        setLoading(true);
-      }
+    if (!isBackgroundRefresh) {
+      setLoading(true);
+    } else {
       setIsRefreshing(true);
+    }
 
-      // Get all data in parallel using Promise.all
-      const [
-        { data: balancesData, error: balancesError },
-        { data: profile, error: profileError },
-        { data: stakingPositions, error: stakingError }
-      ] = await Promise.all([
-        // Get balances with asset info
-        supabase
-          .from('user_balances')
-          .select(`
-            *,
-            asset:assets (
-              id,
-              symbol,
-              name,
-              type,
-              price_per_token,
-              main_image,
-              location
-            )
-          `)
-          .eq('user_id', user.id),
-        
-        // Get profile
-        supabase.rpc('get_profile_by_email', { p_email: user.email }),
-        
-        // Get staking positions
-        supabase
-          .from('staking_positions')
-          .select(`
+    try {
+      // Fetch user balances
+      const { data: rawBalances, error: balancesError } = await supabase
+        .from('user_balances')
+        .select(`
+          id,
+          user_id,
+          asset_id,
+          balance,
+          total_interest_earned,
+          created_at,
+          updated_at,
+          last_transaction_at,
+          asset:assets (
             id,
-            amount,
-            ownership_percentage,
-            pool:pools (
-              id,
-              type,
-              total_value_locked,
-              main_asset:assets (
-                price_per_token
-              )
-            )
-          `)
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-      ]);
+            symbol,
+            name,
+            type,
+            price_per_token,
+            apr,
+            location
+          )
+        `)
+        .eq('user_id', user.id);
 
       if (balancesError) throw balancesError;
-      if (profileError) throw profileError;
+
+      // Fetch staking positions
+      const { data: stakingPositions, error: stakingError } = await supabase
+        .from('staking_positions')
+        .select(`
+          id,
+          amount,
+          ownership_percentage,
+          pool:pools (
+            id,
+            type,
+            total_value_locked,
+            main_asset:assets (
+              price_per_token
+            )
+          )
+        `)
+        .eq('user_id', user.id)
+        .eq('status', 'active');
+
       if (stakingError) throw stakingError;
-      if (!profile) throw new Error('User profile not found');
 
       // Process balances
-      const processedBalances = balancesData.map(balance => ({
+      const processedBalances = (rawBalances || []).map((balance: any) => ({
         ...balance,
-        total_value: balance.balance * balance.asset.price_per_token
+        total_value: balance.balance * (balance.asset?.price_per_token || 0)
       }));
 
-      // Add USD with zero balance if it doesn't exist
-      const usdAsset = processedBalances.find(b => b.asset.symbol === 'USD')?.asset;
-      if (!processedBalances.some(b => b.asset.symbol === 'USD') && usdAsset) {
-        processedBalances.unshift({
-          id: 'usd-placeholder',
-          user_id: user.id,
-          asset_id: usdAsset.id,
-          balance: 0,
-          total_value: 0,
-          total_interest_earned: 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          last_transaction_at: null,
-          asset: usdAsset
-        });
-      }
+      // Sort balances by total value
+      const sortedBalances = processedBalances.sort((a: any, b: any) => 
+        (b.total_value || 0) - (a.total_value || 0)
+      );
 
-      setBalances(processedBalances);
+      // Fetch staking info
+      const honeyStakingInfo = await transactionService.getHoneyStakingInfo(user.id);
+      const btcStakingInfo = await transactionService.getBitcoinStakingInfo(user.id);
+      const transactions = await transactionService.getUserTransactions(user.id);
 
-      // Get transactions and staking info in parallel
-      const [transactionsData, stakingData, btcData] = await Promise.all([
-        transactionService.getUserTransactions(profile.user_id),
-        transactionService.getHoneyStakingInfo(profile.user_id),
-        transactionService.getBitcoinStakingInfo(profile.user_id)
-      ]);
-
-      // Calculate 30-day returns
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
-      const returns = transactionsData
-        .filter(t => 
-          t.type === 'loan_distribution' && 
-          t.status === 'completed' &&
-          new Date(t.created_at) >= thirtyDaysAgo
-        )
-        .reduce((sum, t) => sum + (t.metadata?.usd_amount || 0), 0);
-      
-      setReturns30D(returns);
-
-      // Calculate staking gains
-      if (stakingPositions) {
-        const totalGains = stakingPositions.reduce((sum, position) => {
-          const initialStakeUSD = position.amount * position.pool.main_asset.price_per_token;
-          const currentValue = position.ownership_percentage * position.pool.total_value_locked;
-          return sum + (currentValue - initialStakeUSD);
-        }, 0);
-
-        setStakingGains(totalGains);
-      }
-
-      // Update state with all fetched data
-      if (transactionsData) {
-        const mappedTransactions = transactionsData.map(t => ({
-          ...t,
-          asset: {
-            ...t.asset,
-            type: t.asset.symbol.startsWith('DEBT') ? 'debt' : 'commodity'
-          }
-        }));
-
-        setTransactions(mappedTransactions);
-        setStakingInfo(stakingData);
-        
-        if (btcData) {
-          setBtcStakingInfo({
-            btcXBalance: btcData.bitcoinXBalance,
-            stakingPercentage: btcData.stakingPercentage
-          });
-        }
-        
-        const btcBalanceData = processedBalances.find(b => b.asset.symbol === 'BTC');
-        setBtcBalance(btcBalanceData?.balance || 0);
-        setBtcAsset(btcBalanceData?.asset || null);
-      }
-    } catch (err) {
-      console.error('Error fetching portfolio data:', err);
-      if (!isBackgroundRefresh) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
-      }
+      setBalances(sortedBalances);
+      setStakingInfo(honeyStakingInfo);
+      setBitcoinStakingInfo(btcStakingInfo);
+    } catch (error) {
+      console.error('Error fetching portfolio data:', error);
     } finally {
-      if (!isBackgroundRefresh) {
-        setLoading(false);
-      }
+      setLoading(false);
       setIsRefreshing(false);
     }
   };
 
-// Auto-refresh interval
-useEffect(() => {
-  if (!user || isAdminPortal) return;
+  useEffect(() => {
+    fetchPortfolioData();
 
-  const interval = setInterval(() => {
-    fetchPortfolioData(true);  // Background refresh for subsequent updates
-  }, 300000); // Changed from 30000 to 300000 (5 minutes)
+    // Set up auto-refresh interval
+    const interval = setInterval(() => {
+      fetchPortfolioData(true);
+    }, 30000); // Refresh every 30 seconds
 
-  return () => clearInterval(interval);
-}, [user, isAdminPortal]); 
+    return () => clearInterval(interval);
+  }, [user]);
+
+  return (
+    <div className="space-y-8">
+      {/* Add your portfolio UI components here */}
+    </div>
+  );
+}; 
