@@ -933,17 +933,17 @@ export const transactionService = {
     paymentAmount,
     poolMainAssetPrice
   }: ApproveBuyTransactionParams) {
-    console.log('Starting approveBuyTransaction:', {
-      transactionId,
-      poolId,
-      pricePerToken,
-      paymentAmount,
-      poolMainAssetPrice
-    });
-
     try {
-      // First, directly check transaction status and get asset info
-      const { data: currentTransaction, error: checkError } = await supabase
+      console.log('Starting approveBuyTransaction with params:', {
+        transactionId,
+        poolId,
+        pricePerToken,
+        paymentAmount,
+        poolMainAssetPrice
+      });
+
+      // Get transaction details first
+      const { data: transaction, error: txError } = await supabase
         .from('transactions')
         .select(`
           *,
@@ -956,99 +956,110 @@ export const transactionService = {
         .eq('id', transactionId)
         .single();
 
-      console.log('Direct transaction check:', {
-        found: !!currentTransaction,
-        error: checkError,
-        status: currentTransaction?.status,
-        metadata: currentTransaction?.metadata,
-        assetType: currentTransaction?.asset?.type,
-        assetSymbol: currentTransaction?.asset?.symbol
+      if (txError) throw txError;
+
+      console.log('Transaction details:', {
+        transaction,
+        paymentMethod: transaction.metadata?.payment_method,
+        isInPool: !!poolId,
+        assetType: transaction.asset?.type,
+        assetSymbol: transaction.asset?.symbol
       });
 
-      if (checkError || !currentTransaction) {
-        throw new TransactionError(
-          'Transaction not found',
-          'NOT_FOUND_ERROR'
-        );
+      // For USD balance payments, check balance first
+      if (transaction.metadata?.payment_method === 'usd_balance') {
+        const { data: usdAsset } = await supabase
+          .from('assets')
+          .select('id')
+          .eq('symbol', 'USD')
+          .single();
+
+        if (!usdAsset) {
+          throw new TransactionError(
+            'USD asset not found',
+            'ASSET_ERROR'
+          );
+        }
+
+        // Check user's USD balance WITHOUT creating/resetting it
+        const { data: userBalance } = await supabase
+          .from('user_balances')
+          .select('balance')
+          .eq('user_id', transaction.user_id)
+          .eq('asset_id', usdAsset.id)
+          .single();
+
+        console.log('User USD balance check:', {
+          userId: transaction.user_id,
+          balance: userBalance?.balance,
+          requiredAmount: paymentAmount
+        });
+
+        if (!userBalance || userBalance.balance < paymentAmount) {
+          throw new TransactionError(
+            'Insufficient USD balance',
+            'BALANCE_ERROR',
+            `Required: ${paymentAmount}, Available: ${userBalance?.balance || 0}`
+          );
+        }
       }
 
-      // Update transaction metadata with USD amount
-      const { error: updateError } = await adminSupabase
-        .from('transactions')
-        .update({
-          metadata: {
-            ...currentTransaction.metadata,
-            usd_amount: paymentAmount
-          }
-        })
-        .eq('id', transactionId);
-
-      if (updateError) {
-        console.error('Error updating transaction metadata:', updateError);
-        throw new TransactionError(
-          'Failed to update transaction metadata',
-          'UPDATE_ERROR'
-        );
-      }
-
-      // Handle direct asset transactions (BTC/HONEY) differently from pool-based transactions
-      const isDirectAsset = currentTransaction.asset?.symbol === 'BTC' || currentTransaction.asset?.symbol === 'HONEY';
-      
-      if (isDirectAsset) {
-        // For direct assets, use approve_direct_asset_order
+      // Direct assets (BTC/HONEY) use approve_direct_asset_order
+      if (transaction.asset?.symbol === 'BTC' || transaction.asset?.symbol === 'HONEY') {
+        console.log('Processing direct asset order');
         const { data, error } = await supabase.rpc('approve_direct_asset_order', {
           p_transaction_id: transactionId,
           p_price_per_token: pricePerToken
         });
 
-        console.log('Direct asset order approval result:', {
-          success: !!data,
-          error,
-          response: data
-        });
-
-        if (error) {
-          console.error('Error in approve_direct_asset_order:', error);
-          throw new TransactionError(
-            error.message,
-            error.code,
-            error.details
-          );
-        }
-
-        return data;
-      } else {
-        // For pool-based transactions, use existing approve_usd_balance_order
-        if (!poolMainAssetPrice) {
-          throw new TransactionError(
-            'Pool main asset price is required for pool transactions',
-            'VALIDATION_ERROR'
-          );
-        }
-
-        const { data, error } = await supabase.rpc('approve_usd_balance_order', {
-          p_transaction_id: transactionId,
-          p_price_per_token: pricePerToken,
-          p_pool_main_asset_price: poolMainAssetPrice
-        });
-
-        console.log('Pool-based order approval result:', {
-          success: !!data,
-          error,
-          response: data
-        });
-
-        if (error) {
-          console.error('Error in approve_usd_balance_order:', error);
-          throw new TransactionError(
-            error.message,
-            error.code,
-            error.details
-          );
-        }
-
+        if (error) throw error;
         return data;
       }
+
+      // Non-pool debt assets with USD balance use approve_usd_balance_order
+      if (transaction.asset?.type === 'debt' && !poolId && transaction.metadata?.payment_method === 'usd_balance') {
+        console.log('Processing USD balance order for non-pool debt asset');
+        const { data, error } = await supabase.rpc('approve_usd_balance_order', {
+          p_transaction_id: transactionId,
+          p_price_per_token: pricePerToken
+        });
+
+        if (error) throw error;
+        return data;
+      }
+
+      // All other cases (including pool-based debt assets) use process_buy_transaction
+      if (poolId && !poolMainAssetPrice) {
+        throw new TransactionError(
+          'Pool ID and pool main asset price are required for pool asset transactions',
+          'VALIDATION_ERROR'
+        );
+      }
+
+      console.log('Processing buy transaction with params:', {
+        transactionId,
+        pricePerToken,
+        poolMainAssetPrice,
+        poolId
+      });
+
+      const { data, error } = await supabase.rpc('process_buy_transaction', {
+        p_transaction_id: transactionId,
+        p_price_per_token: pricePerToken,
+        p_pool_main_asset_price: poolMainAssetPrice,
+        p_pool_id: poolId
+      });
+
+      if (error) {
+        console.error('Error in process_buy_transaction:', error);
+        throw new TransactionError(
+          error.message,
+          error.code,
+          error.details
+        );
+      }
+
+      return data;
     } catch (err) {
       console.error('Full error in approveBuyTransaction:', err);
       if (err instanceof TransactionError) {

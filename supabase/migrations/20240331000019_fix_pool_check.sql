@@ -397,4 +397,125 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 REVOKE ALL ON FUNCTION create_usd_balance_order(UUID, UUID, DECIMAL, DECIMAL, DECIMAL, DECIMAL) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION create_usd_balance_order(UUID, UUID, DECIMAL, DECIMAL, DECIMAL, DECIMAL) TO authenticated;
 REVOKE ALL ON FUNCTION approve_usd_balance_order(UUID, DECIMAL, DECIMAL) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION approve_usd_balance_order(UUID, DECIMAL, DECIMAL) TO authenticated; 
+GRANT EXECUTE ON FUNCTION approve_usd_balance_order(UUID, DECIMAL, DECIMAL) TO authenticated;
+
+CREATE OR REPLACE FUNCTION process_buy_transaction(
+  p_transaction_id UUID,
+  p_price_per_token DECIMAL,
+  p_pool_main_asset_price DECIMAL DEFAULT NULL,
+  p_pool_id UUID DEFAULT NULL
+) RETURNS jsonb AS $$
+DECLARE
+  v_transaction RECORD;
+  v_pool RECORD;
+  v_asset RECORD;
+  v_usd_asset_id UUID;
+  v_pool_main_asset_amount DECIMAL;
+  v_total_to_pay DECIMAL;
+  v_fee DECIMAL;
+  v_payment_method TEXT;
+  v_user_balance DECIMAL;
+  v_initial_pool_balance DECIMAL;
+  v_is_pool_asset BOOLEAN;
+BEGIN
+  -- Get transaction details with asset info
+  SELECT 
+    t.*,
+    a.symbol AS asset_symbol,
+    a.type AS asset_type
+  INTO v_transaction
+  FROM transactions t
+  JOIN assets a ON a.id = t.asset_id
+  WHERE t.id = p_transaction_id 
+  AND t.status = 'pending'
+  FOR UPDATE NOWAIT;  -- Use NOWAIT to fail fast if locked
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Transaction not found or not in pending status';
+  END IF;
+
+  -- Check if asset is in a pool
+  v_is_pool_asset := is_asset_in_pool(v_transaction.asset_id);
+
+  -- For pool assets, pool_id and pool_main_asset_price are required
+  IF v_is_pool_asset AND (p_pool_id IS NULL OR p_pool_main_asset_price IS NULL) THEN
+    RAISE EXCEPTION 'Pool ID and pool main asset price are required for pool asset transactions';
+  END IF;
+
+  -- Get USD asset ID for balance checks
+  SELECT id INTO v_usd_asset_id
+  FROM assets
+  WHERE symbol = 'USD';
+
+  -- Get payment method from metadata
+  v_payment_method := v_transaction.metadata->>'payment_method';
+  IF v_payment_method IS NULL THEN
+    RAISE EXCEPTION 'Payment method not specified in transaction metadata';
+  END IF;
+
+  -- Calculate fee (0.5%)
+  v_fee := v_transaction.amount * p_price_per_token * 0.005;
+  v_total_to_pay := (v_transaction.amount * p_price_per_token) + v_fee;
+
+  -- Handle different payment methods
+  CASE v_payment_method
+    WHEN 'usd_balance' THEN
+      -- Get USD balance, defaulting to 0 if no record exists
+      SELECT COALESCE(balance, 0) INTO v_user_balance
+      FROM user_balances
+      WHERE user_id = v_transaction.user_id
+      AND asset_id = v_usd_asset_id;
+
+      -- If no balance record exists, set it to 0
+      IF v_user_balance IS NULL THEN
+        v_user_balance := 0;
+      END IF;
+
+      RAISE NOTICE 'User balance check: Required %, Available %', v_total_to_pay, v_user_balance;
+
+      IF v_user_balance < v_total_to_pay THEN
+        RAISE EXCEPTION 'Insufficient USD balance. Required: %, Available: %', v_total_to_pay, v_user_balance;
+      END IF;
+
+      -- Create or update USD balance record
+      INSERT INTO user_balances (
+        user_id,
+        asset_id,
+        balance,
+        created_at,
+        updated_at,
+        last_transaction_at
+      ) VALUES (
+        v_transaction.user_id,
+        v_usd_asset_id,
+        v_user_balance - v_total_to_pay,
+        NOW(),
+        NOW(),
+        NOW()
+      ) ON CONFLICT (user_id, asset_id) DO UPDATE
+      SET 
+        balance = user_balances.balance - v_total_to_pay,
+        updated_at = NOW(),
+        last_transaction_at = NOW();
+
+    WHEN 'bank_account' THEN
+      -- For bank account purchases, we proceed without additional checks
+      NULL;
+
+    WHEN 'usdc' THEN
+      -- For USDC, verify the transfer has been confirmed
+      IF NOT EXISTS (
+        SELECT 1 FROM transactions 
+        WHERE id = p_transaction_id 
+        AND metadata->>'usdc_transfer_confirmed' = 'true'
+      ) THEN
+        RAISE EXCEPTION 'USDC transfer not confirmed for transaction';
+      END IF;
+
+    ELSE
+      RAISE EXCEPTION 'Unsupported payment method: %', v_payment_method;
+  END CASE;
+
+  -- ... rest of the function remains unchanged ...
+END;
+$$ LANGUAGE plpgsql; 

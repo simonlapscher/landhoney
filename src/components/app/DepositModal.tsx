@@ -229,24 +229,28 @@ export const DepositModal: React.FC<DepositModalProps> = ({ isOpen, onClose, ass
             <h3 className="font-medium">Bank Transfer Details</h3>
             <div className="space-y-3 text-light/80">
               <div className="flex justify-between">
-                <span>Bank Name</span>
-                <span className="font-medium">Mercury</span>
+                <div>
+                  <div className="text-sm text-light/60 mb-1">Bank Name</div>
+                  <div className="text-light">JP Morgan Chase</div>
+                </div>
               </div>
               <div className="flex justify-between">
-                <span>Account Name</span>
-                <span className="font-medium">Landhoney Inc</span>
+                <div>
+                  <div className="text-sm text-light/60 mb-1">Account Type</div>
+                  <div className="text-light">Checking</div>
+                </div>
               </div>
               <div className="flex justify-between">
-                <span>Account Type</span>
-                <span className="font-medium">Checking</span>
+                <div>
+                  <div className="text-sm text-light/60 mb-1">Account Number</div>
+                  <div className="text-light">699265222</div>
+                </div>
               </div>
               <div className="flex justify-between">
-                <span>Routing Number</span>
-                <span className="font-medium">123456789</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Account Number</span>
-                <span className="font-medium">987654321</span>
+                <div>
+                  <div className="text-sm text-light/60 mb-1">Routing Number</div>
+                  <div className="text-light">267084131</div>
+                </div>
               </div>
             </div>
           </div>

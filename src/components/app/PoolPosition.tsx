@@ -38,7 +38,7 @@ export const PoolPosition: React.FC<PoolPositionProps> = ({
   // Pool return is the difference between current value and initial stake
   const poolReturn = currentValue - initialStakeUSD;
   const mainAssetSymbol = pool.main_asset.symbol;
-  const ownershipPercentage = poolOwnership * 100;
+  const ownershipPercentage = poolOwnership;
   
   // Calculate token amounts
   const currentTokenAmount = currentValue / pricePerToken;
@@ -85,7 +85,7 @@ export const PoolPosition: React.FC<PoolPositionProps> = ({
       <div className="space-y-6">
         {/* Initial Stake */}
         <div>
-          <div className="text-sm text-light/60 mb-1">Initial Stake</div>
+          <div className="text-sm text-light/60 mb-1">Staked</div>
           <div className="text-xl font-medium text-light">
             {formatCurrency(initialStakeUSD)}
           </div>

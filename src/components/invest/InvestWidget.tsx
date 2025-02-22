@@ -11,7 +11,7 @@ import { useBalances } from '../../lib/hooks/useBalances';
 import { formatCurrency } from '../../lib/utils/formatters';
 import { toast } from 'react-hot-toast';
 
-type PaymentMethodData = 'usd_balance' | 'bank_account' | 'usdc';
+type PaymentMethodData = 'usd_balance';
 
 interface InvestWidgetProps {
   asset: Asset;
@@ -20,7 +20,7 @@ interface InvestWidgetProps {
   onSuccess?: () => void;
 }
 
-type WidgetState = 'input' | 'review' | 'confirmation' | 'payment_instructions';
+type WidgetState = 'input' | 'review' | 'confirmation';
 
 export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, userBalance = 0, onSuccess }) => {
   // Input state
@@ -139,21 +139,7 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
         throw new Error('Please sign in to invest');
       }
 
-      // If bank account payment, show payment instructions
-      if (paymentMethod === 'bank_account') {
-        const transaction = await transactionService.createBuyTransaction({
-          userId: user.id,
-          assetId: asset.id,
-          amount: tokenAmount,
-          pricePerToken: asset.price_per_token,
-          paymentMethod: 'bank_account'
-        });
-        setTransaction(transaction);
-        setWidgetState('payment_instructions');
-        return;
-      }
-
-      // For USD balance or USDC payments
+      // Create transaction
       const transaction = await transactionService.createBuyTransaction({
         userId: user.id,
         assetId: asset.id,
@@ -164,13 +150,8 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
 
       setTransaction(transaction);
       setWidgetState('confirmation');
-      
-      if (paymentMethod === 'usd_balance') {
-        toast.success('Purchase successful!');
-        onSuccess?.();
-      } else {
-        toast.success('Purchase request submitted for approval');
-      }
+      toast.success('Purchase successful!');
+      onSuccess?.();
 
     } catch (err) {
       console.error('Error processing purchase:', err);
@@ -184,75 +165,6 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
     setWidgetState('input');
   };
 
-  const handleShowPaymentInstructions = () => {
-    setWidgetState('payment_instructions');
-  };
-
-  const renderPaymentInstructions = () => (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h2 className="text-xl font-bold text-light mb-2">Payment Instructions</h2>
-        <p className="text-light/60">
-          Send your payment to complete your investment. Once verified, your tokens will be available in your account.
-        </p>
-      </div>
-
-      <div className="bg-light/5 p-6 rounded-xl space-y-4">
-        <div>
-          <div className="text-sm text-light/60 mb-1">Bank Name</div>
-          <div className="text-light">First Century Bank</div>
-        </div>
-        <div>
-          <div className="text-sm text-light/60 mb-1">Account Number</div>
-          <div className="text-light">4589002</div>
-        </div>
-        <div>
-          <div className="text-sm text-light/60 mb-1">Routing Number</div>
-          <div className="text-light">061120084</div>
-        </div>
-        <div>
-          <div className="text-sm text-light/60 mb-1">Amount to Send</div>
-          <div className="text-light">${totalAmount.toLocaleString()}</div>
-        </div>
-        <div>
-          <div className="text-sm text-light/60 mb-1">Reference Number</div>
-          <div className="flex items-center gap-2">
-            <span className="text-light">{transaction?.id}</span>
-            <button
-              onClick={handleCopy}
-              className="text-primary hover:text-primary/80"
-            >
-              {copySuccess ? (
-                <CheckCircleIcon className="w-5 h-5" />
-              ) : (
-                <ClipboardDocumentIcon className="w-5 h-5" />
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="text-sm text-light/60">
-        <div className="flex items-center gap-2">
-          <Tooltip content="This helps us match your payment to your order">
-            <InformationCircleIcon className="w-4 h-4" />
-          </Tooltip>
-          <p>Please include the reference number with your payment.</p>
-        </div>
-        <p>Your investment will be processed once payment is received.</p>
-      </div>
-
-      <button
-        onClick={onClose}
-        className="w-full bg-[#00D54B] text-dark font-bold py-3 rounded-xl"
-      >
-        Done
-      </button>
-    </div>
-  );
-
-  const navigate = useNavigate();
-
   // Add this helper function at the top of the file
   const formatAmount = (amount: number, type: 'token' | 'usd') => {
     return type === 'token' ? amount.toFixed(4) : amount.toFixed(2);
@@ -263,11 +175,6 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="text-xl font-bold text-light mb-2">Success - Your order has been created!</h2>
-        {paymentMethod === 'usdc' && (
-          <p className="text-light/60">
-            Your order has been initiated. Once we verify your USDC payment, your tokens will be available in your account.
-          </p>
-        )}
       </div>
 
       <div className="bg-light/5 p-6 rounded-xl space-y-4">
@@ -299,65 +206,6 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
         </div>
       </div>
 
-      {paymentMethod !== 'usdc' && (
-        <button
-          onClick={onClose}
-          className="w-full bg-[#00D54B] text-dark font-bold py-3 rounded-xl"
-        >
-          Done
-        </button>
-      )}
-    </div>
-  );
-
-  // Add USDC payment instructions renderer
-  const renderUsdcInstructions = () => (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h2 className="text-xl font-bold text-light mb-2">Payment Instructions</h2>
-        <p className="text-light/60">
-          Send your USDC payment to complete your investment. Once verified, your tokens will be available in your account.
-        </p>
-      </div>
-
-      <div className="bg-light/5 p-6 rounded-xl space-y-4">
-        <div>
-          <div className="text-sm text-light/60 mb-1">USDC Address (Ethereum)</div>
-          <div className="flex items-center gap-2">
-            <span className="text-light font-mono">{address}</span>
-            <button
-              onClick={handleCopy}
-              className="text-primary hover:text-primary/80"
-            >
-              {copySuccess ? (
-                <CheckCircleIcon className="w-5 h-5" />
-              ) : (
-                <ClipboardDocumentIcon className="w-5 h-5" />
-              )}
-            </button>
-          </div>
-        </div>
-        <div>
-          <div className="text-sm text-light/60 mb-1">Amount to Send</div>
-          <div className="text-light">{totalAmount.toFixed(2)} USDC</div>
-        </div>
-      </div>
-
-      <div className="text-sm text-light/60 space-y-2">
-        <div className="flex items-center gap-2">
-          <Tooltip content="Only send USDC using the Ethereum network">
-            <InformationCircleIcon className="w-4 h-4" />
-          </Tooltip>
-          <p>This address will only receive USDC on the Ethereum network.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Tooltip content="Funds sent on other networks cannot be recovered">
-            <InformationCircleIcon className="w-4 h-4" />
-          </Tooltip>
-          <p>Tokens sent to the wrong network will result in lost funds.</p>
-        </div>
-      </div>
-
       <button
         onClick={onClose}
         className="w-full bg-[#00D54B] text-dark font-bold py-3 rounded-xl"
@@ -367,30 +215,10 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
     </div>
   );
 
-  if (widgetState === 'payment_instructions') {
-    return (
-      <div className="max-w-lg mx-auto bg-dark/95 p-6 rounded-2xl shadow-xl border border-light/10">
-        {paymentMethod === 'usdc' ? renderUsdcInstructions() : renderPaymentInstructions()}
-      </div>
-    );
-  }
-
   if (widgetState === 'confirmation') {
     return (
       <div className="max-w-lg mx-auto bg-dark/95 p-6 rounded-2xl shadow-xl border border-light/10">
-        {paymentMethod === 'usd_balance' ? (
-          renderSuccessScreen()
-        ) : (
-          <>
-            {renderSuccessScreen()}
-            <button
-              onClick={handleShowPaymentInstructions}
-              className="w-full bg-[#00D54B] text-dark font-bold py-3 rounded-xl mt-4"
-            >
-              View Payment Instructions
-            </button>
-          </>
-        )}
+        {renderSuccessScreen()}
       </div>
     );
   }
@@ -502,17 +330,13 @@ export const InvestWidget: React.FC<InvestWidgetProps> = ({ asset, onClose, user
             <select
               value={selectedPaymentMethod || paymentMethod}
               onChange={(e) => {
-                if (e.target.value === 'usd_balance') {
-                  setSelectedPaymentMethod(null);
-                }
+                setSelectedPaymentMethod(null);
                 setPaymentMethod(e.target.value as PaymentMethodData);
               }}
-              disabled={widgetState === 'review'}
+              disabled={widgetState === 'review' || true}
               className="w-full appearance-none bg-light/10 text-light pl-4 pr-12 py-3 rounded-full focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="usd_balance">USD Balance</option>
-              <option value="bank_account">Bank Account</option>
-              <option value="usdc">USDC</option>
             </select>
             <ChevronDownIcon className="w-5 h-5 text-light absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>

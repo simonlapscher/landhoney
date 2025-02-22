@@ -251,7 +251,9 @@ export const PendingTransactions: React.FC = () => {
             id: transaction.id,
             poolId: selectedPool?.id || null,
             pricePerToken: finalPrice,
-            paymentAmount: transaction.amount * finalPrice,
+            paymentAmount: transaction.metadata?.payment_method === 'usd_balance' 
+              ? transaction.metadata?.usd_amount 
+              : transaction.amount * finalPrice,
             poolMainAssetPrice: poolMainAssetPrice || undefined
           });
 
@@ -259,7 +261,9 @@ export const PendingTransactions: React.FC = () => {
             transactionId: transaction.id,
             poolId: selectedPool?.id || null,
             pricePerToken: finalPrice,
-            paymentAmount: transaction.amount * finalPrice,
+            paymentAmount: transaction.metadata?.payment_method === 'usd_balance' 
+              ? transaction.metadata?.usd_amount 
+              : transaction.amount * finalPrice,
             poolMainAssetPrice: poolMainAssetPrice || undefined
           });
 
@@ -709,4 +713,6 @@ export const PendingTransactions: React.FC = () => {
       </div>
     </div>
   );
-}; 
+};
+
+export default PendingTransactions; 
