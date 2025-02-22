@@ -151,20 +151,26 @@ export const LiquidReserve: React.FC = () => {
 
         setPools(transformedPools);
 
-        // Fetch user staking positions
-        const { data: stakingData, error: stakingError } = await supabase
-          .from('staking_positions')
-          .select(`
-            id,
-            pool_id,
-            staked_amount,
-            current_value,
-            ownership_percentage
-          `)
-          .eq('user_id', user.id)
-          .eq('status', 'active');
+        // Fetch user staking positions and ownership data
+        const [{ data: stakingData, error: stakingError }, { data: ownershipData, error: ownershipError }] = await Promise.all([
+          supabase
+            .from('staking_positions')
+            .select(`
+              id,
+              pool_id,
+              staked_amount,
+              current_value
+            `)
+            .eq('user_id', user.id)
+            .eq('status', 'active'),
+          supabase
+            .from('pool_ownership')
+            .select('*')
+            .eq('user_id', user.id)
+        ]);
 
         if (stakingError) throw stakingError;
+        if (ownershipError) throw ownershipError;
 
         // Get total staked amount for each pool
         const { data: totalStaked, error: totalStakedError } = await supabase
@@ -183,6 +189,7 @@ export const LiquidReserve: React.FC = () => {
         // Calculate user positions with pool share and returns
         const userPositions = transformedPools.map(pool => {
           const stakingPosition = stakingData?.find(pos => pos.pool_id === pool.id);
+          const ownership = ownershipData?.find(o => o.pool_id === pool.id);
           
           // Calculate total staked amount by summing stakes and subtracting unstakes
           const poolTransactions = (totalStaked as DatabaseTransaction[] || [])
@@ -191,10 +198,24 @@ export const LiquidReserve: React.FC = () => {
             return t.type === 'stake' ? sum + t.amount : sum - t.amount;
           }, 0);
 
-          // Calculate current value using ownership percentage (divide by 100 since it's in percentage form)
-          const currentValue = stakingPosition ? (stakingPosition.ownership_percentage / 100 * pool.totalValueLocked) : 0;
+          // Get ownership percentage from the pool_ownership view
+          const ownershipPercentage = ownership?.ownership_percentage || 0;
+          
+          // Calculate current value based on ownership percentage
+          const currentValue = (ownershipPercentage / 100) * pool.totalValueLocked;
           const initialStakeValue = totalStakedAmount * pool.mainAsset.price_per_token;
           const poolReturn = currentValue - initialStakeValue;
+
+          console.log('Position calculation:', {
+            poolId: pool.id,
+            totalStakedAmount,
+            ownershipPercentage,
+            currentValue,
+            initialStakeValue,
+            poolReturn,
+            ownershipDetails: ownership,
+            poolTVL: pool.totalValueLocked
+          });
 
           return {
             poolId: pool.id,
@@ -202,7 +223,7 @@ export const LiquidReserve: React.FC = () => {
             value: currentValue,
             initialStakeValue,
             poolReturn,
-            poolShare: stakingPosition?.ownership_percentage || 0
+            poolShare: ownershipPercentage
           };
         });
 

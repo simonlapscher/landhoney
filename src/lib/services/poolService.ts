@@ -116,7 +116,7 @@ export const poolService = {
       .single();
 
     if (error) {
-      console.error('Error fetching pool ownership:', error);
+      console.error('Error getting user pool share:', error);
       return 0;
     }
 

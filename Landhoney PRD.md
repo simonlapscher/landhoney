@@ -106,21 +106,39 @@ Future integrations (KYC with Sumsub, on-chain wallets with Privy, Transak on/of
             If Selling → use the offline “Selling Widget” approach (the same as the separate Sell Widget PRD).
             On Confirm, record a new transaction in the transactions table and send a notification email to the user.
     4.2.4 Liquid Reserve
-        4.2.4.1 Stats
-            Balances of property assets & Honey (virtual data).
-            Total Value Locked.
-            APR for participating.
+        Overview:
+        • the liquid reserve is a pool of money from users that is used to buy debt assets from users who want to sell their debt assets
+        • there are 2 liquid reserve pools - Honey and Bitcoin. When the user wants to sell, they choose what they want in return (Honey). Then an admin approves the transaction and the user gets paid.
+        • the pool for each liquid reserve pool comes from users staking their Honey or Bitcoin. At any point in time, the pool's balance is comprised of: all users' staked asset (for bitcoin pool, staked bitcoin and for honey pool, staked honey) and any asset that has been sold to the pool and has not been rebought. 
+        • Once a pool holds debt assets (the moment a user sells to the pool), the asset is listed back on the Invest section so users can buy it again. 
+         When a user buys this asset, they will first buy the share of the asset any reserve pool owns, and then the rest from the asset offering directly. 
+         If they buy using their USD balance, the USD balance for the portion of the asset that is coming from the pool is decreased from the user's balance, converted to the pool they sold to's main asset (for bitcoin pool, bitcoin and for honey pool, honey) in the background using the current price of the pool asset, and then it is added into the pool balance.
+        4.2.4.1 Selling to the liquid reserve
+            A user chooses the asset they want to sell, the amount they want to sell and what they want in return (e.g. Bitcoin or Honey).
+            This creates a pending sell transaction in the transactions table for the admin to review and approve.
+            Offline, the admin will look at the current state of the reserve, decide on a price to sell and reach out to the user outside of the platform to make the offer. 
+            Once the user accepts, the admin will enter the price agreed for the asset, and the system will calculate and show the admin: how much USD the user should get. Once calculated, the admin approves the transaction. When that happens: 
+             a) the user balance for the debt asset decreases 
+             b) the user's USD balance for how much the user gets increases, 
+             c) the pool's balance for the debt asset increases
+             d) the pool's balance for the staked asset decreases by the USD amount the user got, converted to the pool's main asset (for bitcoin pool, bitcoin and for honey pool, honey) using the current price of the pool asset. 
+        4.2.4.2 Buying from the liquid reserve
+            Once a pool holds debt assets (the moment a user sells to the pool), the asset is listed back on the Invest section so users can buy it again. 
+             When a user buys this debt asset, they will first buy the share of the asset any reserve pool owns, and then the rest from the asset offering directly. 
+             If they buy using their USD balance:
+              a) the user's USD balance for the portion of debt asset owned by the pool is decreased from the user's balance
+              b) the user's debt asset balance increases by the amount of debt asset the user bought from the pool
+              c) the pool's balance for the debt asset decreases by the amount of debt asset the user bought from the pool
+              d) the pool's staked asset balance increases by the amount of USD the user paid, converted to the pool they sold to's main asset (for bitcoin pool, bitcoin and for honey pool, honey) in the background using the current price of the pool asset. 
+        4.2.4.2 Stats
+            For each pool, show:
+            Balances of property assets & Honey.
+            Total Value Locked (sum of staked assets and debt assets).
+            APR for participating (default 8.8% for honey pool and 9.5% for bitcoin pool)
             Breakdown chart (e.g., pie or bar) by token balance.
             Add liquidity button that opens add liquidity modal
-        4.2.4.2 Add Liquidity
-            From (Honey, USD, USDC)
-            Amount input
-                If USD, show wire instructions.
-                If USDC, show deposit address.
-            Explanation text about how liquidity is used.
-            Review → Add Liquidity button → final confirmation.
-            Creates a transaction in transactions with type “liquidity_add” or similar.
-            Notification email to user confirming the liquidity addition.
+        4.2.4.2 Add and RemoveLiquidity
+            Brings up staking and unstaking modal where user can add or remove their Honey or Bitcoin from the pool if they have any.
     4.2.5 Honey & Staking Honey
      Overview:
      Honey is a gold‐pegged commodity asset whose price is updated every 30 minutes via an oracle (e.g., Chainlink or another gold price aggregator). Users can acquire Honey, stake it for yield, and sell it (with admin approval). A special internal token, HoneyX, tracks the staked portion of a user’s Honey balance.

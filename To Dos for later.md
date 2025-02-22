@@ -5,17 +5,20 @@ Authentication & Security:
 - [ ] Add a "forgot password" flow
 - [ ] Add password strength indicator
 - [ ] Add view password eye icon
-- [ ] Add rate limiting for failed login attempts
 - [ ] Add session timeout handling
 - [ ] Add multi-factor authentication option
-- [ ] Add account recovery security questions
 
 Email & Communication:
-- [ ] Add account creation email
-- [ ] Change email to Landhoney domain
-- [ ] Add custom SMTP to Supabase so auth emails are sent from Landhoney
-- [ ] Add email preferences during signup (marketing, notifications)
-- [ ] Add automated welcome email A/B testing
+- [ ] Change verification email to Landhoney domain (Add custom SMTP to Supabase so auth emails are sent from Landhoney)
+- [ ] Add order creation email
+- [ ] Add order confirmation email  
+- [ ] Add deposit initiation email
+- [ ] Add deposit confirmation email
+- [ ] Add withdrawal initiation email
+- [ ] Add withdrawal confirmation email
+- [ ] Add staking confirmation email
+- [ ] Add unstaking confirmation email  
+- [ ] Add new asset listing email
 
 User Experience:
 - [ ] Add form validation error messages (e.g., invalid email format, password too short)
@@ -58,3 +61,11 @@ Invest pop up:
 
 Profile:
 - [ ] Test changing email flow
+
+
+Check functionality: 
+- honey unstaking not modifying the liquid reserve balance
+- staking not adding to pool
+
+- Supabase type generation
+- Pool assets are Bitcoin and Honey instead of BitcoinX and HoneyX
