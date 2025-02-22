@@ -108,38 +108,18 @@ export const poolService = {
   },
 
   async getUserPoolShare(poolId: string, userId: string): Promise<number> {
-    interface StakeWithAsset {
-      amount: number;
-      assets: {
-        price_per_token: number;
-      };
-    }
-
-    // Get user's total value in pool
-    const { data: rawUserStakes } = await supabase
-      .from('staking_positions')
-      .select(`
-        amount,
-        assets (price_per_token)
-      `)
+    const { data, error } = await supabase
+      .from('pool_ownership')
+      .select('ownership_percentage')
       .eq('pool_id', poolId)
-      .eq('user_id', userId);
-
-    // Get pool's total value
-    const { data: pool } = await supabase
-      .from('pools')
-      .select('total_value_locked')
-      .eq('id', poolId)
+      .eq('user_id', userId)
       .single();
 
-    if (!pool || !rawUserStakes) return 0;
+    if (error) {
+      console.error('Error fetching pool ownership:', error);
+      return 0;
+    }
 
-    const userStakes = rawUserStakes as unknown as StakeWithAsset[];
-    const userValue = userStakes.reduce(
-      (sum, stake) => sum + stake.amount * stake.assets.price_per_token,
-      0
-    );
-
-    return userValue / pool.total_value_locked;
+    return data?.ownership_percentage || 0;
   }
 }; 
