@@ -1,3 +1,40 @@
+export interface Asset {
+  id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExtendedAsset extends Asset {
+  type: 'debt' | 'commodity' | 'cash';
+  name: string;
+  symbol: string;
+  main_image: string;
+  price_per_token: number;
+  location?: string;
+  apr?: number;
+}
+
+export interface PortfolioBalance {
+  id: string;
+  user_id: string;
+  asset_id: string;
+  balance: number;
+  total_value: number;
+  total_interest_earned: number;
+  created_at: string;
+  updated_at: string;
+  last_transaction_at: string | null;
+  asset: ExtendedAsset;
+}
+
+export interface SimpleAsset {
+  id: string;
+  symbol: string;
+  name: string;
+  price_per_token: number;
+  type: 'debt' | 'commodity' | 'cash';
+}
+
 export interface StakingInfo {
   honeyBalance: number;
   honeyXBalance: number;

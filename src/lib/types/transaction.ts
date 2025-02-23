@@ -1,4 +1,6 @@
-export type TransactionType = 'buy' | 'sell' | 'convert' | 'earn' | 'stake' | 'unstake' | 'loan_distribution';
+import { ExtendedAsset } from './portfolio';
+
+export type TransactionType = 'buy' | 'sell' | 'convert' | 'earn' | 'stake' | 'unstake' | 'loan_distribution' | 'deposit' | 'withdraw';
 export type TransactionStatus = 'pending' | 'completed' | 'failed' | 'cancelled';
 export type PaymentMethod = 'usd_balance' | 'bank_account' | 'usdc';
 
@@ -33,4 +35,8 @@ export interface Transaction {
   metadata?: TransactionMetadata;
   created_at: string;
   updated_at: string;
+}
+
+export interface TransactionWithAsset extends Transaction {
+  asset: ExtendedAsset;
 } 

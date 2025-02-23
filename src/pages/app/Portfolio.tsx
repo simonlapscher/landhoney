@@ -1,4 +1,19 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../lib/context/AuthContext';
+import { supabase } from '../../lib/supabase';
+import { transactionService } from '../../lib/services/transactionService';
+import { formatCurrency, formatTokenAmount } from '../../lib/utils/formatters';
+import { Transaction, TransactionWithAsset } from '../../lib/types/transaction';
+import { PortfolioBalance, StakingInfo, BitcoinStakingInfo, SimpleAsset, ExtendedAsset } from '../../lib/types/portfolio';
+import { StakingPositionWithPool } from '../../lib/types/pool';
+import { Button } from '../../components/common/Button';
+import { BitcoinAssetDisplay } from '../../components/common/BitcoinAssetDisplay';
+import { OrderDetailPopup } from '../../components/common/OrderDetailPopup';
+
+interface DisplayBalance extends PortfolioBalance {
+  total_value: number;
+}
 
 const fetchPortfolioData = async (isBackgroundRefresh = false) => {
     if (!user) return;
@@ -102,13 +117,13 @@ const fetchPortfolioData = async (isBackgroundRefresh = false) => {
           t.status === 'completed' &&
           new Date(t.created_at) >= thirtyDaysAgo
         )
-        .reduce((sum, t) => sum + (t.metadata?.usd_amount || 0), 0);
+        .reduce((sum: number, t: TransactionWithAsset) => sum + (t.metadata?.usd_amount || 0), 0);
       
       setReturns30D(returns);
 
       // Calculate staking gains
       if (stakingPositions) {
-        const totalGains = stakingPositions.reduce((sum, position) => {
+        const totalGains = stakingPositions.reduce((sum: number, position: StakingPositionWithPool) => {
           const initialStakeUSD = position.amount * position.pool.main_asset.price_per_token;
           const currentValue = position.ownership_percentage * position.pool.total_value_locked;
           return sum + (currentValue - initialStakeUSD);
@@ -164,3 +179,64 @@ useEffect(() => {
 
   return () => clearInterval(interval);
 }, [user, isAdminPortal]); 
+
+export const Portfolio: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [balances, setBalances] = useState<PortfolioBalance[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [assetType, setAssetType] = useState<'all' | 'debt' | 'commodity' | 'cash'>('all');
+  const [stakingInfo, setStakingInfo] = useState<StakingInfo | null>(null);
+  const [showStakingModal, setShowStakingModal] = useState(false);
+  const [selectedHoneyAsset, setSelectedHoneyAsset] = useState<PortfolioBalance | null>(null);
+  const [showUnstakingModal, setShowUnstakingModal] = useState(false);
+  const [returns30D, setReturns30D] = useState<number>(0);
+  const [stakingGains, setStakingGains] = useState<number>(0);
+  const [showBitcoinStakingModal, setShowBitcoinStakingModal] = useState(false);
+  const [showBitcoinUnstakingModal, setShowBitcoinUnstakingModal] = useState(false);
+  const [btcBalance, setBtcBalance] = useState<number>(0);
+  const [btcAsset, setBtcAsset] = useState<ExtendedAsset | null>(null);
+  const [btcStakingInfo, setBtcStakingInfo] = useState<BitcoinStakingInfo | null>(null);
+  const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<SimpleAsset | null>(null);
+  const [selectedBalance, setSelectedBalance] = useState<number>(0);
+  const [showHoneyStakingModal, setShowHoneyStakingModal] = useState(false);
+  const [showHoneyUnstakingModal, setShowHoneyUnstakingModal] = useState(false);
+  const [honeyAsset, setHoneyAsset] = useState<ExtendedAsset | null>(null);
+
+  // ... rest of the code ...
+
+  // Fix the reduce functions with proper type definitions
+  const returns = transactionsData
+    .filter(t => 
+      t.type === 'loan_distribution' && 
+      t.status === 'completed' &&
+      new Date(t.created_at) >= thirtyDaysAgo
+    )
+    .reduce((sum: number, t: TransactionWithAsset) => sum + (t.metadata?.usd_amount || 0), 0);
+
+  setReturns30D(returns);
+
+  // Calculate total staking gains with proper types
+  const totalGains = positions.reduce((sum: number, position: StakingPositionWithPool) => {
+    const initialStakeUSD = position.amount * position.pool.main_asset.price_per_token;
+    const currentValue = position.ownership_percentage * position.pool.total_value_locked;
+    return sum + (currentValue - initialStakeUSD);
+  }, 0);
+
+  setStakingGains(totalGains);
+
+  // ... rest of the code ...
+
+  // Fix the categorySubtotal calculation with proper types
+  const categorySubtotal = displayBalances.reduce((sum: number, balance: DisplayBalance) => 
+    sum + (balance.balance * balance.asset.price_per_token), 0
+  );
+
+  // ... rest of the code ...
+} 

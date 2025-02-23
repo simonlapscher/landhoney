@@ -55,4 +55,18 @@ export interface StakingPosition {
   status: 'active' | 'unstaked';
   createdAt: string;
   updatedAt: string;
+}
+
+export interface StakingPositionWithPool {
+  id: string;
+  amount: number;
+  ownership_percentage: number;
+  pool: {
+    id: string;
+    type: string;
+    total_value_locked: number;
+    main_asset: {
+      price_per_token: number;
+    };
+  };
 } 
