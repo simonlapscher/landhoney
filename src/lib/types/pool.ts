@@ -23,6 +23,7 @@ export interface Pool {
       symbol: string;
       name: string;
       price_per_token: number;
+      type?: string;
     };
   }>;
 }
@@ -39,6 +40,7 @@ export interface PoolBalance {
     symbol: string;
     name: string;
     price_per_token: number;
+    type?: string;
   };
 }
 

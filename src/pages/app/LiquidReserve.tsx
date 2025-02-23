@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 import { DatabaseAsset } from '../../lib/types/portfolio';
 import { transactionService } from '../../lib/services/transactionService';
 import { ExtendedAsset } from '../../lib/types/asset';
+import { PoolStats } from '../../components/app/PoolStats';
 
 interface PoolStats {
   mainAssetBalance: number;
@@ -22,6 +23,7 @@ interface Pool {
     symbol: string;
     name: string;
     price_per_token: number;
+    main_image: string;
   };
   totalValueLocked: number;
   apr: number;
@@ -32,6 +34,7 @@ interface Pool {
       symbol: string;
       name: string;
       price_per_token: number;
+      type: string;
     };
   }[];
 }
@@ -124,7 +127,8 @@ export const LiquidReserve: React.FC = () => {
               id,
               symbol,
               name,
-              price_per_token
+              price_per_token,
+              main_image
             ),
             pool_assets (
               balance,
@@ -132,7 +136,8 @@ export const LiquidReserve: React.FC = () => {
                 id,
                 symbol,
                 name,
-                price_per_token
+                price_per_token,
+                type
               )
             )
           `);
@@ -146,7 +151,25 @@ export const LiquidReserve: React.FC = () => {
           mainAsset: pool.main_asset,
           totalValueLocked: pool.total_value_locked,
           apr: pool.apr,
-          poolAssets: pool.pool_assets
+          poolAssets: pool.pool_assets.map((pa: { 
+            asset: { 
+              id: string; 
+              symbol: string; 
+              name: string; 
+              price_per_token: number; 
+              type: string; 
+            }; 
+            balance: number; 
+          }) => ({
+            balance: pa.balance,
+            asset: {
+              id: pa.asset.id,
+              symbol: pa.asset.symbol,
+              name: pa.asset.name,
+              price_per_token: pa.asset.price_per_token,
+              type: pa.asset.type
+            }
+          }))
         }));
 
         setPools(transformedPools);
@@ -198,24 +221,11 @@ export const LiquidReserve: React.FC = () => {
             return t.type === 'stake' ? sum + t.amount : sum - t.amount;
           }, 0);
 
-          // Get ownership percentage from the pool_ownership view
+          // Calculate current value using ownership percentage
           const ownershipPercentage = ownership?.ownership_percentage || 0;
-          
-          // Calculate current value based on ownership percentage
           const currentValue = (ownershipPercentage / 100) * pool.totalValueLocked;
           const initialStakeValue = totalStakedAmount * pool.mainAsset.price_per_token;
           const poolReturn = currentValue - initialStakeValue;
-
-          console.log('Position calculation:', {
-            poolId: pool.id,
-            totalStakedAmount,
-            ownershipPercentage,
-            currentValue,
-            initialStakeValue,
-            poolReturn,
-            ownershipDetails: ownership,
-            poolTVL: pool.totalValueLocked
-          });
 
           return {
             poolId: pool.id,
@@ -331,7 +341,7 @@ export const LiquidReserve: React.FC = () => {
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full overflow-hidden bg-[#1E1E1E] flex items-center justify-center">
                   <img 
-                    src={`https://pamfleeuofdmhzyohnjt.supabase.co/storage/v1/object/public/assets/${pool.type === 'bitcoin' ? 'bitcoin' : 'honey'}.png`}
+                    src={pool.mainAsset.main_image}
                     alt={pool.type}
                     className="w-full h-full object-cover"
                     onError={(e) => {
@@ -371,38 +381,55 @@ export const LiquidReserve: React.FC = () => {
               </div>
             </div>
 
-            {/* Pool Composition */}
-            <div className="space-y-4 mb-6">
-              <div className="text-sm text-light/60">Pool Composition</div>
-              <div className="relative h-2 bg-light/10 rounded-full overflow-hidden">
-                {pool.poolAssets.map((asset, index) => {
-                  const percentage = (asset.balance * asset.asset.price_per_token / pool.totalValueLocked) * 100;
-                  const leftOffset = index > 0 ? pool.poolAssets
-                    .slice(0, index)
-                    .reduce((acc, curr) => acc + (curr.balance * curr.asset.price_per_token / pool.totalValueLocked) * 100, 0) : 0;
-                  return (
-                    <div
-                      key={asset.asset.id}
-                      className={`absolute h-full ${
-                        asset.asset.symbol === 'DEBT' ? 'bg-[#00D897]' : 'bg-gradient-to-r from-[#FFD700] to-[#FFA500]'
-                      }`}
-                      style={{
-                        width: `${percentage}%`,
-                        left: `${leftOffset}%`
-                      }}
-                    />
-                  );
-                })}
-              </div>
-              <div className="flex justify-between text-sm">
-                {pool.poolAssets.map(asset => (
-                  <div key={asset.asset.id} className="flex items-center gap-2">
-                    <span className="text-light">{asset.asset.symbol}</span>
-                    <span className="text-light/60">{formatCurrency(asset.balance * asset.asset.price_per_token)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* Replace the custom implementation with PoolStats */}
+            <PoolStats 
+              pool={{
+                id: pool.id,
+                type: pool.type,
+                mainAssetId: pool.mainAsset.id,
+                main_asset: pool.mainAsset,
+                apr: pool.apr,
+                maxSize: 0,
+                isPaused: false,
+                totalValueLocked: pool.totalValueLocked,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                pool_assets: pool.poolAssets
+              }}
+              balances={pool.poolAssets.map((pa: { 
+                asset: { 
+                  id: string; 
+                  symbol: string; 
+                  name: string; 
+                  price_per_token: number; 
+                  type: string; 
+                }; 
+                balance: number; 
+              }) => ({
+                id: pa.asset.id,
+                poolId: pool.id,
+                assetId: pa.asset.id,
+                balance: pa.balance,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                asset: {
+                  id: pa.asset.id,
+                  symbol: pa.asset.symbol,
+                  name: pa.asset.name,
+                  price_per_token: pa.asset.price_per_token,
+                  type: pa.asset.type
+                }
+              }))}
+              userShare={userPositions.find(pos => pos.poolId === pool.id)?.poolShare}
+              onStake={() => pool.type === 'bitcoin' 
+                ? setShowBitcoinStakingModal(true) 
+                : setShowHoneyStakingModal(true)
+              }
+              onUnstake={() => pool.type === 'bitcoin'
+                ? setShowBitcoinStakingModal(true)
+                : setShowHoneyStakingModal(true)
+              }
+            />
 
             {/* Pool Position */}
             {(() => {
