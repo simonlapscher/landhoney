@@ -15,180 +15,15 @@ interface DisplayBalance extends PortfolioBalance {
   total_value: number;
 }
 
-const fetchPortfolioData = async (isBackgroundRefresh = false) => {
-    if (!user) return;
-
-    try {
-      if (!isBackgroundRefresh) {
-        setLoading(true);
-      }
-      setIsRefreshing(true);
-
-      // Get all data in parallel using Promise.all
-      const [
-        { data: balancesData, error: balancesError },
-        { data: profile, error: profileError },
-        { data: stakingPositions, error: stakingError }
-      ] = await Promise.all([
-        // Get balances with asset info
-        supabase
-          .from('user_balances')
-          .select(`
-            *,
-            asset:assets (
-              id,
-              symbol,
-              name,
-              type,
-              price_per_token,
-              main_image,
-              location
-            )
-          `)
-          .eq('user_id', user.id),
-        
-        // Get profile
-        supabase.rpc('get_profile_by_email', { p_email: user.email }),
-        
-        // Get staking positions
-        supabase
-          .from('staking_positions')
-          .select(`
-            id,
-            amount,
-            ownership_percentage,
-            pool:pools (
-              id,
-              type,
-              total_value_locked,
-              main_asset:assets (
-                price_per_token
-              )
-            )
-          `)
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-      ]);
-
-      if (balancesError) throw balancesError;
-      if (profileError) throw profileError;
-      if (stakingError) throw stakingError;
-      if (!profile) throw new Error('User profile not found');
-
-      // Process balances
-      const processedBalances = balancesData.map(balance => ({
-        ...balance,
-        total_value: balance.balance * balance.asset.price_per_token
-      }));
-
-      // Add USD with zero balance if it doesn't exist
-      const usdAsset = processedBalances.find(b => b.asset.symbol === 'USD')?.asset;
-      if (!processedBalances.some(b => b.asset.symbol === 'USD') && usdAsset) {
-        processedBalances.unshift({
-          id: 'usd-placeholder',
-          user_id: user.id,
-          asset_id: usdAsset.id,
-          balance: 0,
-          total_value: 0,
-          total_interest_earned: 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          last_transaction_at: null,
-          asset: usdAsset
-        });
-      }
-
-      setBalances(processedBalances);
-
-      // Get transactions and staking info in parallel
-      const [transactionsData, stakingData, btcData] = await Promise.all([
-        transactionService.getUserTransactions(profile.user_id),
-        transactionService.getHoneyStakingInfo(profile.user_id),
-        transactionService.getBitcoinStakingInfo(profile.user_id)
-      ]);
-
-      // Calculate 30-day returns
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
-      const returns = transactionsData
-        .filter(t => 
-          t.type === 'loan_distribution' && 
-          t.status === 'completed' &&
-          new Date(t.created_at) >= thirtyDaysAgo
-        )
-        .reduce((sum: number, t: TransactionWithAsset) => sum + (t.metadata?.usd_amount || 0), 0);
-      
-      setReturns30D(returns);
-
-      // Calculate staking gains
-      if (stakingPositions) {
-        const totalGains = stakingPositions.reduce((sum: number, position: StakingPositionWithPool) => {
-          const initialStakeUSD = position.amount * position.pool.main_asset.price_per_token;
-          const currentValue = position.ownership_percentage * position.pool.total_value_locked;
-          return sum + (currentValue - initialStakeUSD);
-        }, 0);
-
-        setStakingGains(totalGains);
-      }
-
-      // Update state with all fetched data
-      if (transactionsData) {
-        const mappedTransactions = transactionsData.map(t => ({
-          ...t,
-          asset: {
-            ...t.asset,
-            type: t.asset.symbol.startsWith('DEBT') ? 'debt' : 'commodity'
-          }
-        }));
-
-        setTransactions(mappedTransactions);
-        setStakingInfo(stakingData);
-        
-        if (btcData) {
-          setBtcStakingInfo({
-            btcXBalance: btcData.bitcoinXBalance,
-            stakingPercentage: btcData.stakingPercentage
-          });
-        }
-        
-        const btcBalanceData = processedBalances.find(b => b.asset.symbol === 'BTC');
-        setBtcBalance(btcBalanceData?.balance || 0);
-        setBtcAsset(btcBalanceData?.asset || null);
-      }
-    } catch (err) {
-      console.error('Error fetching portfolio data:', err);
-      if (!isBackgroundRefresh) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
-      }
-    } finally {
-      if (!isBackgroundRefresh) {
-        setLoading(false);
-      }
-      setIsRefreshing(false);
-    }
-  };
-
-// Auto-refresh interval
-useEffect(() => {
-  if (!user || isAdminPortal) return;
-
-  const interval = setInterval(() => {
-    fetchPortfolioData(true);  // Background refresh for subsequent updates
-  }, 300000); // Changed from 30000 to 300000 (5 minutes)
-
-  return () => clearInterval(interval);
-}, [user, isAdminPortal]); 
-
 export const Portfolio: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<TransactionWithAsset[]>([]);
   const [balances, setBalances] = useState<PortfolioBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<TransactionWithAsset | null>(null);
   const [assetType, setAssetType] = useState<'all' | 'debt' | 'commodity' | 'cash'>('all');
   const [stakingInfo, setStakingInfo] = useState<StakingInfo | null>(null);
   const [showStakingModal, setShowStakingModal] = useState(false);
@@ -209,34 +44,347 @@ export const Portfolio: React.FC = () => {
   const [showHoneyUnstakingModal, setShowHoneyUnstakingModal] = useState(false);
   const [honeyAsset, setHoneyAsset] = useState<ExtendedAsset | null>(null);
 
-  // ... rest of the code ...
-
-  // Fix the reduce functions with proper type definitions
-  const returns = transactionsData
-    .filter(t => 
-      t.type === 'loan_distribution' && 
-      t.status === 'completed' &&
-      new Date(t.created_at) >= thirtyDaysAgo
-    )
-    .reduce((sum: number, t: TransactionWithAsset) => sum + (t.metadata?.usd_amount || 0), 0);
-
-  setReturns30D(returns);
-
-  // Calculate total staking gains with proper types
-  const totalGains = positions.reduce((sum: number, position: StakingPositionWithPool) => {
-    const initialStakeUSD = position.amount * position.pool.main_asset.price_per_token;
-    const currentValue = position.ownership_percentage * position.pool.total_value_locked;
-    return sum + (currentValue - initialStakeUSD);
-  }, 0);
-
-  setStakingGains(totalGains);
-
-  // ... rest of the code ...
-
-  // Fix the categorySubtotal calculation with proper types
-  const categorySubtotal = displayBalances.reduce((sum: number, balance: DisplayBalance) => 
-    sum + (balance.balance * balance.asset.price_per_token), 0
+  // Check if we're in the admin portal context
+  const isAdminPortal = window.location.pathname.startsWith('/admin') || (
+    user?.email?.endsWith('@landhoney.io') && !user.email?.startsWith('simon+')
   );
 
-  // ... rest of the code ...
-} 
+  const fetchPortfolioData = async (isBackgroundRefresh = false) => {
+    if (!user) {
+      console.log('No user found in Portfolio');
+      setError('No authenticated user');
+      setLoading(false);
+      return;
+    }
+
+    if (isAdminPortal) {
+      console.log('Admin portal or admin user detected, blocking portfolio access');
+      setError('Portfolio view is not available for admin users');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      if (!isBackgroundRefresh) {
+        setLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+      setError(null);
+
+      // Get profile using email
+      const { data: profile, error: profileError } = await supabase.rpc(
+        'get_profile_by_email',
+        { p_email: user.email }
+      );
+
+      if (profileError) {
+        console.error('Profile fetch error:', profileError);
+        throw new Error('Failed to verify user profile');
+      }
+
+      if (!profile) {
+        console.error('No profile found for email:', user.email);
+        throw new Error('User profile not found');
+      }
+
+      const [transactionsData, stakingData, btcData] = await Promise.all([
+        transactionService.getUserTransactions(profile.user_id) as Promise<TransactionWithAsset[]>,
+        transactionService.getHoneyStakingInfo(profile.user_id),
+        transactionService.getBitcoinStakingInfo(profile.user_id)
+      ]);
+
+      // Calculate 30-day returns from completed loan distribution transactions
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const returns = transactionsData
+        .filter(t => 
+          t.type === 'loan_distribution' && 
+          t.status === 'completed' &&
+          new Date(t.created_at) >= thirtyDaysAgo
+        )
+        .reduce((sum: number, t: TransactionWithAsset) => sum + (t.metadata?.usd_amount || 0), 0);
+      
+      setReturns30D(returns);
+
+      // Get active staking positions to calculate total gains
+      const { data: stakingPositions, error: stakingError } = await supabase
+        .from('staking_positions')
+        .select(`
+          id,
+          amount,
+          ownership_percentage,
+          pool:pools (
+            id,
+            type,
+            total_value_locked,
+            main_asset:assets (
+              price_per_token
+            )
+          )
+        `)
+        .eq('user_id', profile.user_id)
+        .eq('status', 'active');
+
+      if (stakingError) {
+        console.error('Error fetching staking positions:', stakingError);
+      } else if (stakingPositions) {
+        // Calculate total staking gains
+        const positions = stakingPositions as unknown as StakingPositionWithPool[];
+        const totalGains = positions.reduce((sum: number, position: StakingPositionWithPool) => {
+          const initialStakeUSD = position.amount * position.pool.main_asset.price_per_token;
+          const currentValue = position.ownership_percentage * position.pool.total_value_locked;
+          return sum + (currentValue - initialStakeUSD);
+        }, 0);
+
+        setStakingGains(totalGains);
+      }
+
+      if (transactionsData) {
+        setTransactions(transactionsData);
+        setStakingInfo(stakingData);
+        if (btcData) {
+          const formattedBtcData: BitcoinStakingInfo = {
+            bitcoinBalance: btcData.bitcoinBalance,
+            bitcoinXBalance: btcData.bitcoinXBalance,
+            stakingPercentage: btcData.stakingPercentage
+          };
+          setBtcStakingInfo(formattedBtcData);
+        } else {
+          setBtcStakingInfo(null);
+        }
+        
+        // Find BTC data from balances
+        const btcBalanceData = balances.find(b => b.asset.symbol === 'BTC');
+        setBtcBalance(btcBalanceData?.balance || 0);
+        setBtcAsset(btcBalanceData?.asset || null);
+      }
+    } catch (err) {
+      console.error('Error fetching portfolio data:', err);
+      if (!isBackgroundRefresh) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      }
+    } finally {
+      if (!isBackgroundRefresh) {
+        setLoading(false);
+      }
+      setIsRefreshing(false);
+    }
+  };
+
+  // Auto-refresh interval
+  useEffect(() => {
+    if (!user || isAdminPortal) return;
+
+    const interval = setInterval(() => {
+      fetchPortfolioData(true);  // Background refresh for subsequent updates
+    }, 300000); // Changed from 30000 to 300000 (5 minutes)
+
+    return () => clearInterval(interval);
+  }, [user, isAdminPortal]); 
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-gold" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="text-red-500 text-xl mb-4">{error}</div>
+        <Button onClick={() => navigate('/')} variant="secondary">
+          Return Home
+        </Button>
+      </div>
+    );
+  }
+
+  if (isAdminPortal) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="text-red-500 text-xl mb-4">
+          Portfolio view is not available for admin users
+        </div>
+        <Button onClick={() => navigate('/')} variant="secondary">
+          Return Home
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex flex-col space-y-8">
+        {/* Portfolio Header */}
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold">Portfolio</h1>
+          <div className="flex space-x-4">
+            <Button
+              onClick={() => fetchPortfolioData(true)}
+              variant="secondary"
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </Button>
+          </div>
+        </div>
+
+        {/* Asset Type Filter */}
+        <div className="flex space-x-4">
+          {['all', 'debt', 'commodity', 'cash'].map((type) => (
+            <Button
+              key={type}
+              onClick={() => setAssetType(type as typeof assetType)}
+              variant={assetType === type ? 'primary' : 'secondary'}
+            >
+              {type.charAt(0).toUpperCase() + type.slice(1)}
+            </Button>
+          ))}
+        </div>
+
+        {/* Portfolio Content */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {balances
+            .filter((balance) => 
+              assetType === 'all' || balance.asset.type === assetType
+            )
+            .map((balance) => (
+              <div
+                key={balance.asset.id}
+                className="bg-white rounded-lg shadow-md p-6"
+              >
+                <div className="flex items-center space-x-4">
+                  {balance.asset.symbol === 'BTC' ? (
+                    <BitcoinAssetDisplay 
+                      asset={balance.asset}
+                      stakingPercentage={btcStakingInfo?.stakingPercentage || 0}
+                    />
+                  ) : (
+                    <img
+                      src={balance.asset.main_image}
+                      alt={balance.asset.name}
+                      className="w-12 h-12 rounded-full"
+                    />
+                  )}
+                  <div>
+                    <h3 className="text-xl font-semibold">{balance.asset.name}</h3>
+                    <p className="text-gray-500">{balance.asset.symbol}</p>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <p className="text-sm text-gray-500">Balance</p>
+                  <p className="text-lg font-semibold">
+                    {formatTokenAmount(balance.balance)} {balance.asset.symbol}
+                  </p>
+                  <p className="text-sm text-gray-500">Value</p>
+                  <p className="text-lg font-semibold">
+                    {formatCurrency(balance.balance * balance.asset.price_per_token)}
+                  </p>
+                </div>
+                <div className="mt-4 flex space-x-2">
+                  <Button
+                    onClick={() => {
+                      setSelectedAsset(balance.asset);
+                      setSelectedBalance(balance.balance);
+                      setShowDepositModal(true);
+                    }}
+                    variant="secondary"
+                    className="flex-1"
+                  >
+                    Deposit
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setSelectedAsset(balance.asset);
+                      setSelectedBalance(balance.balance);
+                      setShowWithdrawModal(true);
+                    }}
+                    variant="secondary"
+                    className="flex-1"
+                  >
+                    Withdraw
+                  </Button>
+                </div>
+              </div>
+            ))}
+        </div>
+
+        {/* Transaction History */}
+        <div className="mt-8">
+          <h2 className="text-2xl font-bold mb-4">Transaction History</h2>
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <table className="min-w-full">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Type
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Asset
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Amount
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {transactions.map((transaction) => (
+                  <tr
+                    key={transaction.id}
+                    onClick={() => setSelectedTransaction(transaction)}
+                    className="cursor-pointer hover:bg-gray-50"
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {new Date(transaction.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {transaction.type}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {transaction.asset.symbol}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {formatTokenAmount(transaction.amount)} {transaction.asset.symbol}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          transaction.status === 'completed'
+                            ? 'bg-green-100 text-green-800'
+                            : transaction.status === 'pending'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {transaction.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Modals */}
+        {selectedTransaction && (
+          <OrderDetailPopup
+            transaction={selectedTransaction}
+            onClose={() => setSelectedTransaction(null)}
+            isOpen={!!selectedTransaction}
+          />
+        )}
+      </div>
+    </div>
+  );
+}; 
