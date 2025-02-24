@@ -19,6 +19,12 @@ interface FundingStats {
 export const AssetCard: React.FC<AssetCardProps> = ({ asset }) => {
   const navigate = useNavigate();
   const [fundingStats, setFundingStats] = useState<FundingStats | null>(null);
+  const isDebtAsset = asset.type === 'debt';
+  
+  // Calculate if debt asset is fully funded using fundingStats
+  const isFullyFunded = isDebtAsset && 
+    fundingStats && 
+    fundingStats.remaining_amount <= 0;
 
   useEffect(() => {
     const fetchFundingStats = async () => {
@@ -122,15 +128,22 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset }) => {
               </div>
             </div>
 
-            <button 
-              onClick={handleInvestClick}
-              className="w-full text-dark font-medium py-3 px-6 rounded-lg hover:opacity-90 transition-colors"
-              style={{
-                background: 'linear-gradient(90deg, #00D54B 0%, #00F76C 100%)'
-              }}
-            >
-              Invest
-            </button>
+            <div className="p-4">
+              <button
+                onClick={handleInvestClick}
+                disabled={isFullyFunded}
+                className={`w-full py-3 px-4 rounded-lg text-center font-medium ${
+                  isFullyFunded 
+                    ? 'bg-gradient-to-r from-gray-600 to-gray-700 cursor-not-allowed text-gray-400'
+                    : 'text-dark hover:opacity-90 transition-colors'
+                }`}
+                style={!isFullyFunded ? {
+                  background: 'linear-gradient(90deg, #00D54B 0%, #00F76C 100%)'
+                } : undefined}
+              >
+                {isFullyFunded ? 'Fully Funded' : 'Invest'}
+              </button>
+            </div>
           </div>
         ) : asset.type === 'commodity' ? (
           <div className="flex flex-col justify-between h-full">
