@@ -44,7 +44,7 @@ export const WelcomeScreen: React.FC = () => {
             ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
             <button
               onClick={handleGetStarted}
-              className="w-full bg-primary text-dark font-bold py-3 px-6 rounded-xl hover:bg-secondary-honey transition-colors"
+              className="w-full bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-dark font-bold py-3 px-6 rounded-xl hover:opacity-90 transition-colors"
             >
               Get Started
             </button>
