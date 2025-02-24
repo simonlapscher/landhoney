@@ -145,32 +145,39 @@ export const LiquidReserve: React.FC = () => {
         if (poolsError) throw poolsError;
 
         // Transform pool data to match our Pool interface
-        const transformedPools = (poolsData as any[]).map(pool => ({
-          id: pool.id,
-          type: pool.type as 'bitcoin' | 'honey',
-          mainAsset: pool.main_asset,
-          totalValueLocked: pool.total_value_locked,
-          apr: pool.apr,
-          poolAssets: pool.pool_assets.map((pa: { 
-            asset: { 
-              id: string; 
-              symbol: string; 
-              name: string; 
-              price_per_token: number; 
-              type: string; 
-            }; 
-            balance: number; 
-          }) => ({
-            balance: pa.balance,
-            asset: {
-              id: pa.asset.id,
-              symbol: pa.asset.symbol,
-              name: pa.asset.name,
-              price_per_token: pa.asset.price_per_token,
-              type: pa.asset.type
-            }
-          }))
-        }));
+        const transformedPools = (poolsData as any[]).map(pool => {
+          // Find the BTC/HONEY balance in pool_assets
+          const mainAssetBalance = pool.pool_assets.find(
+            (pa: any) => pa.asset.symbol === (pool.type === 'bitcoin' ? 'BTCX' : 'HONEYX')
+          )?.balance || 0;
+
+          console.log('Pool TVL calculation:', {
+            poolType: pool.type,
+            mainAssetBalance,
+            price: pool.main_asset.price_per_token,
+            calculatedTVL: mainAssetBalance * pool.main_asset.price_per_token
+          });
+
+          const calculatedTVL = mainAssetBalance * pool.main_asset.price_per_token;
+
+          return {
+            id: pool.id,
+            type: pool.type as 'bitcoin' | 'honey',
+            mainAsset: pool.main_asset,
+            totalValueLocked: calculatedTVL,
+            apr: pool.apr,
+            poolAssets: pool.pool_assets.map((pa: any) => ({
+              balance: pa.balance,
+              asset: {
+                id: pa.asset.id,
+                symbol: pa.asset.symbol,
+                name: pa.asset.name,
+                price_per_token: pa.asset.price_per_token,
+                type: pa.asset.type
+              }
+            }))
+          };
+        });
 
         setPools(transformedPools);
 
