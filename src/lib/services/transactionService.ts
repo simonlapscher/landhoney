@@ -942,21 +942,54 @@ export const transactionService = {
         poolMainAssetPrice
       });
 
-      // Get transaction details first
-      const { data: transaction, error: txError } = await supabase
+      // First get just the transaction to ensure it exists
+      const { data: transactionBase, error: txBaseError } = await supabase
         .from('transactions')
-        .select(`
-          *,
-          asset:assets (
-            id,
-            symbol,
-            type
-          )
-        `)
+        .select('*')
         .eq('id', transactionId)
-        .single();
+        .maybeSingle();
 
-      if (txError) throw txError;
+      if (txBaseError) {
+        console.error('Error fetching base transaction:', txBaseError);
+        throw txBaseError;
+      }
+
+      if (!transactionBase) {
+        console.error('Transaction not found:', transactionId);
+        throw new TransactionError(
+          'Transaction not found',
+          'NOT_FOUND'
+        );
+      }
+
+      // Then get the asset details separately
+      const { data: assetData, error: assetError } = await supabase
+        .from('assets')
+        .select('id, symbol, type')
+        .eq('id', transactionBase.asset_id)
+        .maybeSingle();
+
+      if (assetError) {
+        console.error('Error fetching asset:', assetError);
+        throw assetError;
+      }
+
+      if (!assetData) {
+        console.error('Asset not found for transaction:', {
+          transactionId,
+          assetId: transactionBase.asset_id
+        });
+        throw new TransactionError(
+          'Asset not found',
+          'ASSET_NOT_FOUND'
+        );
+      }
+
+      // Combine the data
+      const transaction = {
+        ...transactionBase,
+        asset: assetData
+      };
 
       console.log('Transaction details:', {
         transaction,
@@ -1050,6 +1083,13 @@ export const transactionService = {
         p_pool_id: poolId
       });
 
+      console.log('Process buy transaction response:', {
+        success: data?.success,
+        error: data?.error,
+        detail: data?.detail,
+        transaction: data?.transaction
+      });
+
       if (error) {
         console.error('Error in process_buy_transaction:', error);
         throw new TransactionError(
@@ -1058,6 +1098,26 @@ export const transactionService = {
           error.details
         );
       }
+
+      // Check if the response indicates success
+      if (!data.success) {
+        console.error('Transaction failed:', {
+          error: data.error,
+          detail: data.detail,
+          transaction: data.transaction
+        });
+        throw new TransactionError(
+          data.error || 'Failed to process buy transaction',
+          'TRANSACTION_ERROR',
+          data.detail
+        );
+      }
+
+      console.log('Transaction processed successfully:', {
+        transaction: data.transaction,
+        status: data.transaction?.status,
+        completedAt: data.transaction?.completed_at
+      });
 
       return data;
     } catch (err) {

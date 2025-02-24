@@ -267,6 +267,11 @@ export const PendingTransactions: React.FC = () => {
             poolMainAssetPrice: poolMainAssetPrice || undefined
           });
 
+          // Check if the transaction was successful
+          if (!result.success) {
+            throw new Error(result.error || 'Failed to process buy transaction');
+          }
+
           // Show success toast and refresh transactions
           toast.success('Transaction approved successfully');
           await fetchTransactions();

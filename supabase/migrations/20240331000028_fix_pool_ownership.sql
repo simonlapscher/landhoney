@@ -365,7 +365,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Recreate the update_staking_positions function
+-- Create or replace the update_staking_positions function
 CREATE OR REPLACE FUNCTION update_staking_positions()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -374,24 +374,45 @@ DECLARE
     v_shares_amount DECIMAL;
     v_btcx_asset_id UUID;
     v_honeyx_asset_id UUID;
+    v_asset_symbol TEXT;
 BEGIN
     IF NEW.type = 'stake' AND NEW.status = 'completed' THEN
+        -- Get the asset symbol first
+        SELECT symbol INTO v_asset_symbol
+        FROM assets
+        WHERE id = NEW.asset_id;
+
+        -- Log the asset being staked
+        RAISE NOTICE 'Processing stake for asset: %', v_asset_symbol;
+
         -- Get the appropriate pool ID and shares asset ID
         SELECT p.id, a.id INTO v_pool_id, v_shares_asset_id
         FROM pools p
         CROSS JOIN assets a
         WHERE p.type = (
             CASE 
-                WHEN (SELECT symbol FROM assets WHERE id = NEW.asset_id) = 'BTC' THEN 'bitcoin'::pool_type
-                WHEN (SELECT symbol FROM assets WHERE id = NEW.asset_id) = 'HONEY' THEN 'honey'::pool_type
+                WHEN v_asset_symbol = 'BTC' THEN 'bitcoin'::pool_type
+                WHEN v_asset_symbol = 'HONEY' THEN 'honey'::pool_type
             END
         )
         AND a.symbol = (
             CASE 
-                WHEN (SELECT symbol FROM assets WHERE id = NEW.asset_id) = 'BTC' THEN 'BTCPS'
-                WHEN (SELECT symbol FROM assets WHERE id = NEW.asset_id) = 'HONEY' THEN 'HONEYPS'
+                WHEN v_asset_symbol = 'BTC' THEN 'BTCPS'
+                WHEN v_asset_symbol = 'HONEY' THEN 'HONEYPS'
             END
         );
+
+        -- Log pool lookup results
+        RAISE NOTICE 'Pool lookup results - pool_id: %, shares_asset_id: %', v_pool_id, v_shares_asset_id;
+
+        -- Verify we found the pool and shares asset
+        IF v_pool_id IS NULL THEN
+            RAISE EXCEPTION 'Pool not found for asset: %', v_asset_symbol;
+        END IF;
+
+        IF v_shares_asset_id IS NULL THEN
+            RAISE EXCEPTION 'Shares asset not found for asset: %', v_asset_symbol;
+        END IF;
 
         -- Get BTCX/HONEYX asset ID
         SELECT id INTO v_btcx_asset_id FROM assets WHERE symbol = 'BTCX';
@@ -402,7 +423,7 @@ BEGIN
             'stake_start',
             v_pool_id,
             CASE 
-                WHEN (SELECT symbol FROM assets WHERE id = NEW.asset_id) = 'BTC' THEN v_btcx_asset_id
+                WHEN v_asset_symbol = 'BTC' THEN v_btcx_asset_id
                 ELSE v_honeyx_asset_id
             END,
             NULL,
@@ -415,20 +436,44 @@ BEGIN
         -- Calculate shares amount (1:1 for now)
         v_shares_amount := NEW.amount;
 
-        -- Update pool shares balance
-        PERFORM update_pool_assets(v_pool_id, v_shares_asset_id, v_shares_amount, true, 'stake_shares');
+        -- Insert or update pool shares balance
+        INSERT INTO pool_assets (
+            pool_id,
+            asset_id,
+            balance,
+            created_at,
+            updated_at
+        ) VALUES (
+            v_pool_id,
+            v_shares_asset_id,
+            v_shares_amount,
+            NOW(),
+            NOW()
+        ) ON CONFLICT (pool_id, asset_id) 
+        DO UPDATE SET
+            balance = pool_assets.balance + v_shares_amount,
+            updated_at = NOW();
 
-        -- Update pool's main asset (BTCX/HONEYX) balance
-        PERFORM update_pool_assets(
+        -- Insert or update pool's main asset (BTCX/HONEYX) balance
+        INSERT INTO pool_assets (
+            pool_id,
+            asset_id,
+            balance,
+            created_at,
+            updated_at
+        ) VALUES (
             v_pool_id,
             CASE 
-                WHEN (SELECT symbol FROM assets WHERE id = NEW.asset_id) = 'BTC' THEN v_btcx_asset_id
-                WHEN (SELECT symbol FROM assets WHERE id = NEW.asset_id) = 'HONEY' THEN v_honeyx_asset_id
+                WHEN v_asset_symbol = 'BTC' THEN v_btcx_asset_id
+                ELSE v_honeyx_asset_id
             END,
             NEW.amount,
-            true,
-            'stake_main_asset'
-        );
+            NOW(),
+            NOW()
+        ) ON CONFLICT (pool_id, asset_id) 
+        DO UPDATE SET
+            balance = pool_assets.balance + NEW.amount,
+            updated_at = NOW();
 
         -- Update user's share balance
         INSERT INTO user_balances (
@@ -464,11 +509,14 @@ BEGIN
             'stake_complete',
             v_pool_id,
             CASE 
-                WHEN (SELECT symbol FROM assets WHERE id = NEW.asset_id) = 'BTC' THEN v_btcx_asset_id
+                WHEN v_asset_symbol = 'BTC' THEN v_btcx_asset_id
                 ELSE v_honeyx_asset_id
             END,
             NULL,
-            (SELECT balance FROM pool_assets WHERE pool_id = v_pool_id AND asset_id = v_btcx_asset_id),
+            (SELECT balance FROM pool_assets WHERE pool_id = v_pool_id AND asset_id = CASE 
+                WHEN v_asset_symbol = 'BTC' THEN v_btcx_asset_id
+                ELSE v_honeyx_asset_id
+            END),
             0,
             NEW.id,
             jsonb_build_object(
@@ -479,6 +527,11 @@ BEGIN
     END IF;
     
     RETURN NEW;
+EXCEPTION
+    WHEN OTHERS THEN
+        -- Log the error details
+        RAISE NOTICE 'Error in update_staking_positions: % %', SQLERRM, SQLSTATE;
+        RAISE;
 END;
 $$ LANGUAGE plpgsql;
 

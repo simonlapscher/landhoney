@@ -34,37 +34,6 @@ const Tooltip: React.FC<TooltipProps> = ({ content }) => (
   </div>
 );
 
-const updatePoolAfterStaking = async (poolId: string, amount: number, pricePerToken: number, honeyAsset: ExtendedAsset) => {
-  try {
-    // 1. Update or insert pool_assets record
-    const { error: poolAssetsError } = await supabase
-      .from('pool_assets')
-      .upsert({
-        pool_id: poolId,
-        asset_id: honeyAsset.id,
-        balance: amount
-      }, {
-        onConflict: 'pool_id,asset_id',
-        ignoreDuplicates: false
-      });
-
-    if (poolAssetsError) throw poolAssetsError;
-
-    // 2. Update pool's TVL
-    const { error: poolError } = await supabase
-      .from('pools')
-      .update({
-        total_value_locked: supabase.rpc('increment_pool_tvl', { amount: amount * pricePerToken })
-      })
-      .eq('id', poolId);
-
-    if (poolError) throw poolError;
-  } catch (err) {
-    console.error('Error updating pool after staking:', err);
-    throw err;
-  }
-};
-
 export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
   isOpen,
   onClose,
@@ -128,15 +97,6 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
       console.log('Starting staking transaction...', { numAmount, userId });
       await transactionService.stakeHoney(userId, numAmount);
       
-      // After successful staking, update pool
-      const { data: honeyPool } = await supabase.rpc('get_honey_pool');
-      
-      const poolData = honeyPool?.data ?? null;
-
-      if (poolData) {
-        await updatePoolAfterStaking(poolData.id, numAmount, pricePerToken, honeyAsset);
-      }
-
       setShowConfirmation(false);
       setShowSuccess(true);
     } catch (err) {

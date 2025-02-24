@@ -184,6 +184,49 @@ export const Portfolio: React.FC = () => {
     return () => clearInterval(interval);
   }, [user, isAdminPortal]); 
 
+  const processBalances = (rawBalances: any[]) => {
+    return rawBalances
+      .filter(balance => {
+        // Filter out pool share assets
+        const symbol = balance.asset?.symbol;
+        return symbol !== 'BTCPS' && symbol !== 'HONEYPS';
+      })
+      .map(balance => ({
+        id: balance.id,
+        user_id: balance.user_id,
+        asset_id: balance.asset_id,
+        balance: balance.balance,
+        total_value: balance.balance * balance.asset.price_per_token,
+        total_interest_earned: balance.total_interest_earned,
+        created_at: balance.created_at,
+        updated_at: balance.updated_at,
+        last_transaction_at: balance.last_transaction_at,
+        asset: {
+          id: balance.asset.id,
+          type: balance.asset.type,
+          name: balance.asset.name,
+          symbol: balance.asset.symbol,
+          main_image: balance.asset.main_image,
+          price_per_token: balance.asset.price_per_token,
+          location: balance.asset.location,
+          apr: balance.asset.apr
+        }
+      }));
+  };
+
+  const getCategoryTotal = (category: 'debt' | 'commodities') => {
+    return balances
+      .filter(balance => {
+        // Filter out pool share assets and match category
+        const symbol = balance.asset.symbol;
+        if (symbol === 'BTCPS' || symbol === 'HONEYPS') return false;
+        return category === 'debt' 
+          ? balance.asset.type === 'debt'
+          : balance.asset.type === 'commodity';
+      })
+      .reduce((total, balance) => total + (balance.balance * balance.asset.price_per_token), 0);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
