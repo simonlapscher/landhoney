@@ -9,10 +9,12 @@ import {
   DocumentCheckIcon,
   UserPlusIcon,
   ArrowRightOnRectangleIcon,
-  TrophyIcon
+  TrophyIcon,
+  HomeIcon
 } from '@heroicons/react/24/outline';
 
 const menuItems = [
+  { path: '.', label: 'Home', icon: HomeIcon },
   { path: 'transactions', label: 'Pending Transactions', icon: ClockIcon },
   { path: 'prices', label: 'Price Management', icon: CurrencyDollarIcon },
   { path: 'loans', label: 'Loan Distribution', icon: BanknotesIcon },
@@ -75,6 +77,7 @@ export const AdminLayout: React.FC = () => {
             <NavLink
               key={path}
               to={`/admin/${path}`}
+              end
               onClick={(e) => {
                 e.preventDefault();
                 navigate(`/admin/${path}`);

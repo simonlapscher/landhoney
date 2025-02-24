@@ -42,6 +42,7 @@ import { BeeNameStep } from './components/onboarding/BeeNameStep';
 import { ReferralStep } from './components/onboarding/ReferralStep';
 import { PollenLeaderboard } from './components/app/PollenLeaderboard';
 import { PollenRewards } from './pages/admin/PollenRewards';
+import { Home as AdminHome } from './pages/admin/Home';
 
 const queryClient = new QueryClient();
 
@@ -86,6 +87,7 @@ const App: React.FC = () => {
             <Route path="/admin">
               <Route path="login" element={<AdminLogin />} />
               <Route element={<AdminLayout />}>
+                <Route index element={<AdminHome />} />
                 <Route path="transactions" element={<PendingTransactions />} />
                 <Route path="prices" element={<PriceManagement />} />
                 <Route path="loans" element={<LoanDistribution />} />
@@ -94,7 +96,6 @@ const App: React.FC = () => {
                 <Route path="add-asset" element={<AddAsset />} />
                 <Route path="referrals" element={<Referrals />} />
                 <Route path="pollen" element={<PollenRewards />} />
-                <Route index element={<Navigate to="transactions" replace />} />
               </Route>
             </Route>
             

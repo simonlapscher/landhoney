@@ -479,14 +479,14 @@ export const transactionService = {
         );
       }
 
-      // Call the unstake_honey function
+      // Call the unstake_honey function with corrected parameter name
       const { data: transaction, error: transactionError } = await supabase.rpc(
         'unstake_honey',
         {
           p_user_id: userId,
           p_amount: amount,
           p_honey_id: honeyAsset.id,
-          p_honeyx_id: honeyXAsset.id,
+          p_honeyx_asset_id: honeyXAsset.id,
           p_price_per_token: honeyAsset.price_per_token
         }
       );
@@ -943,7 +943,7 @@ export const transactionService = {
       });
 
       // First get just the transaction to ensure it exists
-      const { data: transactionBase, error: txBaseError } = await supabase
+      const { data: transactionBase, error: txBaseError } = await adminSupabase
         .from('transactions')
         .select('*')
         .eq('id', transactionId)
@@ -963,7 +963,7 @@ export const transactionService = {
       }
 
       // Then get the asset details separately
-      const { data: assetData, error: assetError } = await supabase
+      const { data: assetData, error: assetError } = await adminSupabase
         .from('assets')
         .select('id, symbol, type')
         .eq('id', transactionBase.asset_id)
@@ -1001,7 +1001,7 @@ export const transactionService = {
 
       // For USD balance payments, check balance first
       if (transaction.metadata?.payment_method === 'usd_balance') {
-        const { data: usdAsset } = await supabase
+        const { data: usdAsset } = await adminSupabase
           .from('assets')
           .select('id')
           .eq('symbol', 'USD')
@@ -1015,7 +1015,7 @@ export const transactionService = {
         }
 
         // Check user's USD balance WITHOUT creating/resetting it
-        const { data: userBalance } = await supabase
+        const { data: userBalance } = await adminSupabase
           .from('user_balances')
           .select('balance')
           .eq('user_id', transaction.user_id)
@@ -1040,7 +1040,7 @@ export const transactionService = {
       // Direct assets (BTC/HONEY) use approve_direct_asset_order
       if (transaction.asset?.symbol === 'BTC' || transaction.asset?.symbol === 'HONEY') {
         console.log('Processing direct asset order');
-        const { data, error } = await supabase.rpc('approve_direct_asset_order', {
+        const { data, error } = await adminSupabase.rpc('approve_direct_asset_order', {
           p_transaction_id: transactionId,
           p_price_per_token: pricePerToken
         });
@@ -1052,7 +1052,7 @@ export const transactionService = {
       // Non-pool debt assets with USD balance use approve_usd_balance_order
       if (transaction.asset?.type === 'debt' && !poolId && transaction.metadata?.payment_method === 'usd_balance') {
         console.log('Processing USD balance order for non-pool debt asset');
-        const { data, error } = await supabase.rpc('approve_usd_balance_order', {
+        const { data, error } = await adminSupabase.rpc('approve_usd_balance_order', {
           p_transaction_id: transactionId,
           p_price_per_token: pricePerToken
         });
@@ -1076,7 +1076,7 @@ export const transactionService = {
         poolId
       });
 
-      const { data, error } = await supabase.rpc('process_buy_transaction', {
+      const { data, error } = await adminSupabase.rpc('process_buy_transaction', {
         p_transaction_id: transactionId,
         p_price_per_token: pricePerToken,
         p_pool_main_asset_price: poolMainAssetPrice,

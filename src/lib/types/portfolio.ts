@@ -73,4 +73,12 @@ export interface DatabasePool {
     balance: number;
     asset: DatabaseAsset;
   }>;
+}
+
+export interface DebtAsset extends ExtendedAsset {
+  debt_assets?: Array<{
+    apr: number;
+    city: string;
+    state: string;
+  }>;
 } 

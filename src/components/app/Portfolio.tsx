@@ -112,26 +112,33 @@ const isDebtAsset = (asset: ExtendedAsset): asset is ExtendedAsset & { type: 'de
 
 // In your mapping function where the balances are processed
 const processBalances = (rawBalances: any[]) => {
-  return rawBalances.map(balance => {
-    const rawAsset = balance.asset;
-    
-    // Preserve the original type from the raw asset
-    const assetType = rawAsset.type as AssetType;
-    
-    console.log('Processing asset:', {
-      symbol: rawAsset.symbol,
-      originalType: rawAsset.type,
-      mappedType: assetType
-    });
-
-    return {
-      ...balance,
+  return rawBalances
+    .filter(balance => {
+      // Filter out pool share assets
+      const symbol = balance.asset?.symbol;
+      return symbol !== 'BTCPS' && symbol !== 'HONEYPS';
+    })
+    .map(balance => ({
+      id: balance.id,
+      user_id: balance.user_id,
+      asset_id: balance.asset_id,
+      balance: balance.balance,
+      total_value: balance.balance * balance.asset.price_per_token,
+      total_interest_earned: balance.total_interest_earned,
+      created_at: balance.created_at,
+      updated_at: balance.updated_at,
+      last_transaction_at: balance.last_transaction_at,
       asset: {
-        ...rawAsset,
-        type: assetType // Ensure we keep the original type
+        id: balance.asset.id,
+        type: balance.asset.type,
+        name: balance.asset.name,
+        symbol: balance.asset.symbol,
+        main_image: balance.asset.main_image,
+        price_per_token: balance.asset.price_per_token,
+        location: balance.asset.location,
+        apr: balance.asset.apr
       }
-    };
-  });
+    }));
 };
 
 const formatTransactionType = (transaction: Transaction) => {
@@ -497,16 +504,21 @@ export const Portfolio: React.FC = () => {
     fetchHoneyAsset();
   }, [user?.id]);
 
-  const totalPortfolioValue = balances.reduce((sum, balance) => sum + Number(balance.total_value), 0);
+  const totalPortfolioValue = balances
+    .filter(balance => balance.asset.symbol !== 'BTCPS' && balance.asset.symbol !== 'HONEYPS')
+    .reduce((sum, balance) => sum + Number(balance.total_value), 0);
   
   const getCategoryTotal = (category: 'debt' | 'commodities') => {
     return balances
-      .filter(balance => 
-        category === 'debt' 
+      .filter(balance => {
+        // Filter out pool share assets and match category
+        const symbol = balance.asset.symbol;
+        if (symbol === 'BTCPS' || symbol === 'HONEYPS') return false;
+        return category === 'debt' 
           ? balance.asset.type === 'debt'
-          : balance.asset.type === 'commodity'
-      )
-      .reduce((sum, balance) => sum + balance.total_value, 0);
+          : balance.asset.type === 'commodity';
+      })
+      .reduce((total, balance) => total + (balance.balance * balance.asset.price_per_token), 0);
   };
 
   const debtTotal = getCategoryTotal('debt');
@@ -551,8 +563,13 @@ export const Portfolio: React.FC = () => {
   const renderBalances = () => {
     if (loading) return null;
 
-    // Filter balances based on type, but always include USD in relevant views
+    // Filter balances based on type and exclude pool shares
     let displayBalances = balances.filter(balance => {
+      // First filter out pool shares
+      if (balance.asset.symbol === 'BTCPS' || balance.asset.symbol === 'HONEYPS') {
+        return false;
+      }
+      // Then apply type filter
       if (balance.asset.symbol === 'USD') {
         return assetType === 'all' || assetType === 'cash';
       }
@@ -566,7 +583,7 @@ export const Portfolio: React.FC = () => {
       return bValue - aValue;
     });
 
-    // Calculate subtotal for current category
+    // Calculate subtotal for current category (excluding pool shares)
     const categorySubtotal = displayBalances.reduce((sum, balance) => 
       sum + (balance.balance * balance.asset.price_per_token), 0
     );

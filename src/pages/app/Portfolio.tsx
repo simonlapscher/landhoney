@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { transactionService } from '../../lib/services/transactionService';
 import { formatCurrency, formatTokenAmount } from '../../lib/utils/formatters';
 import { Transaction, TransactionWithAsset } from '../../lib/types/transaction';
-import { PortfolioBalance, StakingInfo, BitcoinStakingInfo, SimpleAsset, ExtendedAsset } from '../../lib/types/portfolio';
+import { PortfolioBalance, StakingInfo, BitcoinStakingInfo, SimpleAsset, ExtendedAsset, DebtAsset } from '../../lib/types/portfolio';
 import { StakingPositionWithPool } from '../../lib/types/pool';
 import { Button } from '../../components/common/Button';
 import { BitcoinAssetDisplay } from '../../components/common/BitcoinAssetDisplay';
@@ -159,6 +159,53 @@ export const Portfolio: React.FC = () => {
         const btcBalanceData = balances.find(b => b.asset.symbol === 'BTC');
         setBtcBalance(btcBalanceData?.balance || 0);
         setBtcAsset(btcBalanceData?.asset || null);
+      }
+
+      // Process balances and ensure USD is included
+      let processedBalances = (balances || []).reduce<PortfolioBalance[]>((acc, balance) => {
+        // Skip pool share assets (HONEYPS and BTCPS)
+        if (balance.asset.symbol === 'HONEYPS' || balance.asset.symbol === 'BTCPS') {
+          return acc;
+        }
+
+        const isDebtType = balance.asset.type === 'debt';
+        const debtAsset = isDebtType ? (balance.asset as DebtAsset).debt_assets?.[0] : null;
+
+        let combinedBalance = Number(balance.balance);
+        
+        // If this is HONEY, add HONEYX balance
+        if (balance.asset.symbol === 'HONEY') {
+          const honeyXBalance = balances.find(b => b.asset.symbol === 'HONEYX');
+          if (honeyXBalance) {
+            combinedBalance += Number(honeyXBalance.balance);
+          }
+        }
+
+        // If this is BTC, add BTCX balance
+        if (balance.asset.symbol === 'BTC') {
+          const btcXBalance = balances.find(b => b.asset.symbol === 'BTCX');
+          if (btcXBalance) {
+            combinedBalance += Number(btcXBalance.balance);
+          }
+        }
+
+        return [...acc, {
+          ...balance,
+          balance: combinedBalance,
+          total_value: combinedBalance * balance.asset.price_per_token,
+          asset: {
+            ...balance.asset,
+            type: balance.asset.type,
+            apr: debtAsset?.apr || undefined,
+            location: debtAsset?.city && debtAsset?.state 
+              ? `${debtAsset.city}, ${debtAsset.state}`
+              : undefined
+          }
+        }];
+      }, []);
+
+      if (processedBalances) {
+        setBalances(processedBalances);
       }
     } catch (err) {
       console.error('Error fetching portfolio data:', err);
