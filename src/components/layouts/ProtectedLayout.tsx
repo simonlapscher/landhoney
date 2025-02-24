@@ -10,11 +10,14 @@ import {
   TrophyIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../lib/context/AuthContext';
+import { Footer } from './Footer';
+import { useAutoSignOut } from '../../lib/hooks/useAutoSignOut';
 
 export const ProtectedLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  useAutoSignOut();
 
   console.log('ProtectedLayout State:', {
     path: location.pathname,
@@ -86,9 +89,14 @@ export const ProtectedLayout: React.FC = () => {
         </nav>
 
         {/* Main Content */}
-        <main className="flex-1 pl-72 p-8">
-          <Outlet />
-        </main>
+        <div className="flex-1 pl-72">
+          <div className="flex flex-col min-h-screen">
+            <main className="flex-1 p-8">
+              <Outlet />
+            </main>
+            <Footer />
+          </div>
+        </div>
       </div>
     </div>
   );

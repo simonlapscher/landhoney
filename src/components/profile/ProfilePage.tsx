@@ -4,7 +4,7 @@ import { useAuth } from '../../lib/context/AuthContext';
 import { toast } from 'react-hot-toast';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
-import { CameraIcon } from '@heroicons/react/24/outline';
+import { CameraIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
 
 interface Profile {
   id: string;
@@ -214,6 +214,16 @@ export const ProfilePage: React.FC = () => {
     }
     // For financial info, show first 4 and last 4
     return `${value.slice(0, 4)}...${value.slice(-4)}`;
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      // The AuthContext will handle the redirect through its session listener
+    } catch (error) {
+      console.error('Error signing out:', error);
+      toast.error('Failed to sign out');
+    }
   };
 
   if (loading) {
@@ -535,6 +545,16 @@ export const ProfilePage: React.FC = () => {
               </button>
             )}
           </div>
+        </div>
+
+        <div className="mt-12 pt-6 border-t border-light/10">
+          <button
+            onClick={handleSignOut}
+            className="flex items-center gap-2 px-3 py-2 text-red-500 hover:text-red-400 hover:bg-red-500/5 transition-colors text-base font-medium rounded-lg"
+          >
+            <ArrowRightOnRectangleIcon className="w-5 h-5" />
+            Sign out
+          </button>
         </div>
       </div>
     </div>
