@@ -21,10 +21,10 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset }) => {
   const [fundingStats, setFundingStats] = useState<FundingStats | null>(null);
   const isDebtAsset = asset.type === 'debt';
   
-  // Calculate if debt asset is fully funded using fundingStats
-  const isFullyFunded = isDebtAsset && 
+  // Add !! to ensure it's a boolean
+  const isFullyFunded = !!(isDebtAsset && 
     fundingStats && 
-    fundingStats.remaining_amount <= 0;
+    fundingStats.remaining_amount <= 0);
 
   useEffect(() => {
     const fetchFundingStats = async () => {
