@@ -138,8 +138,6 @@ export const AssetDetail: React.FC = () => {
                       <h3>Property Details</h3>
                       <ul>
                         <li>Location: {(asset as DebtAsset).location}</li>
-                        <li>Property Type: Commercial</li>
-                        <li>Square Footage: 7800 sqft</li>
                       </ul>
                     </>
                   )}

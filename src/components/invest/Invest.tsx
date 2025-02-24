@@ -33,10 +33,11 @@ export const Invest: React.FC = () => {
     fetchAssets();
   }, []);
 
-  // First, filter out staking tokens and cash assets
+  // First, filter out staking tokens, cash assets, and specific debt assets
   const investableAssets = assets.filter(asset => {
     const isStakingToken = ['BTCX', 'HONEYX'].includes(asset.symbol);
     const isInvestable = asset.type === 'debt' || asset.type === 'commodity';
+    const isHiddenDebt = ['DEBT1', 'DEBT5'].includes(asset.symbol);
     
     // Add more detailed logging specifically for USD
     if (asset.symbol === 'USD') {
@@ -49,7 +50,7 @@ export const Invest: React.FC = () => {
       });
     }
     
-    const shouldShow = !isStakingToken && isInvestable;
+    const shouldShow = !isStakingToken && isInvestable && !isHiddenDebt;
     console.log(`Asset ${asset.symbol}: shouldShow=${shouldShow}, type=${asset.type}`);
     
     return shouldShow;
@@ -61,12 +62,24 @@ export const Invest: React.FC = () => {
     type: a.type
   })));
 
-  // Then filter by category
-  const filteredAssets = selectedIndex === 0 
+  // Then filter by category and sort
+  const filteredAssets = (selectedIndex === 0 
     ? investableAssets // Show all investable assets (no cash)
     : investableAssets.filter(asset => 
         asset.type === (selectedIndex === 1 ? 'debt' : 'commodity')
-      );
+      )
+  ).sort((a, b) => {
+    // If both are debt assets
+    if (a.type === 'debt' && b.type === 'debt') {
+      // Put DEBT004 last
+      if (a.symbol === 'DEBT004') return 1;
+      if (b.symbol === 'DEBT004') return -1;
+      // Otherwise sort by symbol
+      return a.symbol.localeCompare(b.symbol);
+    }
+    // Keep existing order for non-debt assets
+    return 0;
+  });
 
   if (loading) {
     return (
