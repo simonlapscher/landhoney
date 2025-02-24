@@ -167,6 +167,12 @@ export const AssetDetail: React.FC = () => {
                             ${(asset as DebtAsset).loan_amount.toLocaleString()}
                           </dd>
                         </div>
+                        <div>
+                          <dt className="text-light/60">Appraisal Value</dt>
+                          <dd className="text-light text-lg">
+                            ${(asset as DebtAsset).appraised_value?.toLocaleString() ?? 'N/A'}
+                          </dd>
+                        </div>
                       </dl>
                     </div>
                     <div>

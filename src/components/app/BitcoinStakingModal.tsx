@@ -269,7 +269,7 @@ export const BitcoinStakingModal: React.FC<BitcoinStakingModalProps> = ({
                       Earning rate
                       <Tooltip content="The annual percentage yield you'll earn on your staked Bitcoin" />
                     </div>
-                    <div className="text-[#00D897]">9.5% APY</div>
+                    <div className="text-[#00D897]">—</div>
                   </div>
                   <div className="flex justify-between items-center">
                     <div className="flex items-center">
@@ -388,7 +388,9 @@ export const BitcoinStakingModal: React.FC<BitcoinStakingModalProps> = ({
                   </div>
                   <div className="ml-3">
                     <div className="font-medium">Bitcoin</div>
-                    <div className="text-sm text-[#00D897]">9.5% APY</div>
+                    <div className="text-sm text-[#00D897]">
+                      —
+                    </div>
                   </div>
                 </div>
                 <div className="text-right">

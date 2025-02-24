@@ -353,9 +353,12 @@ export const LiquidReserve: React.FC = () => {
                   <h2 className="text-xl font-bold text-light">
                     {pool.type === 'bitcoin' ? 'Bitcoin' : 'Honey'} Pool
                   </h2>
-                  <p className="text-sm text-light/60">
-                    APR: {pool.apr}%
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <div className="text-2xl font-medium">
+                      {pool.apr === null ? '—' : `${pool.apr}%`}
+                    </div>
+                    <div className="text-sm text-light/60">APR</div>
+                  </div>
                 </div>
               </div>
               <button

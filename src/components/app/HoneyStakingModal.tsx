@@ -284,7 +284,7 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
                   Earning rate
                   <Tooltip content="The annual percentage yield you'll earn on your staked Honey" />
                 </div>
-                <div className="text-[#00D897]">8.8% APY</div>
+                <div className="text-[#00D897]">—</div>
               </div>
               <div className="flex justify-between items-center">
                 <div className="flex items-center">
@@ -406,7 +406,9 @@ export const HoneyStakingModal: React.FC<HoneyStakingModalProps> = ({
                 </div>
                 <div className="ml-3">
                   <div className="font-medium">Honey</div>
-                  <div className="text-sm text-[#00D897]">8.8% APY</div>
+                  <div className="text-sm text-[#00D897]">
+                    —
+                  </div>
                 </div>
               </div>
               <div className="text-right">
