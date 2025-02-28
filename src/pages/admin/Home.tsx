@@ -27,6 +27,18 @@ interface Transaction {
   };
 }
 
+interface UserBalance {
+  asset_symbol: string;
+  asset_name: string;
+  balance: number;
+  usd_value: number;
+}
+
+interface User {
+  id: string;
+  email: string;
+}
+
 export const Home: React.FC = () => {
   const [fees, setFees] = useState<AdminFees[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -34,6 +46,10 @@ export const Home: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const ITEMS_PER_PAGE = 25;
+  const [userSearch, setUserSearch] = useState('');
+  const [users, setUsers] = useState<User[]>([]);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [balances, setBalances] = useState<UserBalance[]>([]);
 
   const fetchFees = async () => {
     const { data, error } = await adminSupabase.rpc('get_admin_fees');
@@ -47,31 +63,62 @@ export const Home: React.FC = () => {
   const fetchTransactions = async () => {
     setLoading(true);
     try {
+      // First get the total count of transactions
+      const { count, error: countError } = await adminSupabase
+        .from('transactions')
+        .select('*', { count: 'exact', head: true });
+
+      if (countError) {
+        console.error('Error getting count:', countError);
+        return;
+      }
+
+      // Calculate total pages
+      const totalCount = count || 0;
+      const calculatedTotalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+      setTotalPages(calculatedTotalPages);
+
+      // Get paginated transactions
       const { data: txData, error: txError } = await adminSupabase
         .from('transactions')
         .select(`
           *,
-          assets!transactions_asset_id_fkey (
+          assets (
             symbol
-          ),
-          profiles!inner (
-            email
           )
         `)
         .order('created_at', { ascending: false })
-        .limit(25);
+        .range((page - 1) * ITEMS_PER_PAGE, (page * ITEMS_PER_PAGE) - 1);
 
       if (txError) {
         console.error('Error fetching transactions:', txError);
         return;
       }
 
-      console.log('Raw transaction data:', txData);
+      // Then let's get user emails in a separate query
+      const userIds = Array.from(new Set((txData || []).map(tx => tx.user_id)));
+      
+      // Use raw query to access auth.users
+      const { data: userData, error: userError } = await adminSupabase
+        .rpc('get_user_emails', {
+          p_user_ids: userIds  // Changed from user_ids to p_user_ids
+        });
+
+      if (userError) {
+        console.error('Error fetching users:', userError);
+        return;
+      }
+
+      // Create a map of user IDs to emails with proper typing
+      const userMap: Record<string, string> = (userData || []).reduce((acc: Record<string, string>, user: { id: string; email: string }) => {
+        acc[user.id] = user.email;
+        return acc;
+      }, {});
 
       const transformedData = (txData || []).map(tx => ({
         ...tx,
         user: { 
-          email: tx.profiles?.email || 'N/A' 
+          email: userMap[tx.user_id as string] || 'N/A' 
         },
         asset: { 
           symbol: tx.assets?.symbol || 'N/A' 
@@ -79,11 +126,46 @@ export const Home: React.FC = () => {
       }));
 
       setTransactions(transformedData);
-      setTotalPages(1); // For now
     } catch (err) {
       console.error('Error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchUserBalances = async (userId?: string) => {
+    try {
+      console.log('Fetching balances for user:', userId);
+      const { data, error } = await adminSupabase
+        .from('user_balances_with_value')
+        .select(`
+          balance,
+          symbol,
+          name,
+          price_per_token,
+          total_value
+        `)
+        .eq('user_id', userId || '')
+        .not('balance', 'eq', 0); // Only show non-zero balances
+
+      if (error) {
+        console.error('Error fetching balances:', error);
+        throw error;
+      }
+      
+      console.log('Raw balance data:', data);
+      
+      const transformedBalances = data.map(balance => ({
+        asset_symbol: balance.symbol,
+        asset_name: balance.name,
+        balance: parseFloat(balance.balance) || 0,
+        usd_value: parseFloat(balance.total_value) || 0
+      }));
+
+      console.log('Transformed balances:', transformedBalances);
+      setBalances(transformedBalances);
+    } catch (err) {
+      console.error('Error fetching balances:', err);
     }
   };
 
@@ -94,6 +176,43 @@ export const Home: React.FC = () => {
   useEffect(() => {
     fetchTransactions();
   }, [page]);
+
+  useEffect(() => {
+    const searchUsers = async () => {
+      if (!userSearch) {
+        setUsers([]);
+        return;
+      }
+
+      try {
+        const { data, error } = await adminSupabase
+          .rpc('search_users_by_email', {
+            search_term: userSearch
+          });
+
+        if (error) throw error;
+        setUsers(data || []);
+      } catch (err) {
+        console.error('Error searching users:', err);
+      }
+    };
+
+    const debounce = setTimeout(searchUsers, 300);
+    return () => clearTimeout(debounce);
+  }, [userSearch]);
+
+  const handleUserSelect = (user: User) => {
+    setSelectedUser(user);
+    setUserSearch(user.email);
+    setUsers([]);
+    fetchUserBalances(user.id);
+  };
+
+  const handleClearFilter = () => {
+    setSelectedUser(null);
+    setUserSearch('');
+    fetchUserBalances();
+  };
 
   return (
     <div className="space-y-8">
@@ -184,6 +303,85 @@ export const Home: React.FC = () => {
             >
               Next
             </button>
+          </div>
+        </div>
+
+        {/* Platform Balances Section */}
+        <div className="bg-dark-800 rounded-lg p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-medium">Platform Balances</h2>
+            
+            {/* User Search */}
+            <div className="relative w-96">
+              <input
+                type="text"
+                value={userSearch}
+                onChange={(e) => {
+                  setUserSearch(e.target.value);
+                  if (!e.target.value) {
+                    setSelectedUser(null);
+                    fetchUserBalances();
+                  }
+                }}
+                placeholder="Filter by user email"
+                className="w-full px-3 py-2 bg-dark-800 border border-dark-600 rounded-lg text-white placeholder-light/40 focus:outline-none focus:border-primary focus:ring-0"
+                style={{ backgroundColor: '#1a1a1a' }}
+              />
+              {users.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full bg-dark-800 rounded-lg overflow-hidden shadow-lg border border-dark-600">
+                  {users.map(user => (
+                    <button
+                      key={user.id}
+                      onClick={() => handleUserSelect(user)}
+                      className="w-full px-3 py-2 text-left text-light hover:bg-dark-700 transition-colors"
+                      style={{ backgroundColor: '#1a1a1a' }}
+                    >
+                      {user.email}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {selectedUser && (
+                <button
+                  onClick={handleClearFilter}
+                  className="absolute right-2 top-2 text-light/60 hover:text-light"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left text-light/60">
+                  <th className="p-2">Asset</th>
+                  <th className="p-2 text-right">Total Balance</th>
+                  <th className="p-2 text-right">USD Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {balances.map((balance) => (
+                  <tr key={balance.asset_symbol} className="border-t border-dark-600">
+                    <td className="p-2">
+                      <div className="text-light">{balance.asset_symbol}</div>
+                      <div className="text-sm text-light/60">{balance.asset_name}</div>
+                    </td>
+                    <td className="p-2 text-right">{balance.balance.toFixed(8)}</td>
+                    <td className="p-2 text-right">{formatCurrency(balance.usd_value)}</td>
+                  </tr>
+                ))}
+                {/* Total Row */}
+                <tr className="border-t border-dark-600 font-semibold">
+                  <td className="p-2">Total</td>
+                  <td className="p-2"></td>
+                  <td className="p-2 text-right">
+                    {formatCurrency(balances.reduce((sum, balance) => sum + (balance.usd_value || 0), 0))}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 
